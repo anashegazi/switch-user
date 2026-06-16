@@ -52,7 +52,7 @@ public class MainActivity extends Activity {
             @Override
             public void onClick(View v) {
                 statusText.setText("Switching to Guest...");
-                execCommand("echo '===SWITCHING==='; am switch-user 10; echo 'SWITCH_EXIT='$?; nohup sh -c 'sleep 8 && cmd notification snooze --for 2147483647 10|com.android.systemui|70|null|10065' >/dev/null 2>&1 &");
+                execCommand("echo '===SWITCHING==='; am switch-user 10; echo 'SWITCH_EXIT='$?; nohup sh -c 'sleep 2 && am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS && sleep 1 && input keyevent 4 && cmd notification snooze --for 2147483647 \"10|com.android.systemui|70|null|10065\" && cmd notification snooze --for 2147483647 \"-1|android|62|null|1000\"' >/dev/null 2>&1 &");
             }
         });
 

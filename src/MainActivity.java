@@ -17,6 +17,7 @@ import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
+import android.widget.ScrollView;
 import android.widget.TextView;
 
 import java.io.BufferedReader;
@@ -43,107 +44,260 @@ public class MainActivity extends Activity {
     private boolean polling = false;
     private Handler handler = new Handler(Looper.getMainLooper());
 
+    private static final int ACCENT = 0xFF1976D2;
+    private static final int DANGER = 0xFFD32F2F;
+    private static final int SUCCESS = 0xFF388E3C;
+    private static final int WARNING = 0xFFF57F17;
+    private static final int OFFLINE = 0xFFD32F2F;
+    private static final int CARD_BG = 0xFFFFFFFF;
+    private static final int PAGE_BG = 0xFFF5F5F5;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        FrameLayout root = new FrameLayout(this);
+        final float dp = getResources().getDisplayMetrics().density;
 
-        LinearLayout layout = new LinearLayout(this);
-        layout.setOrientation(LinearLayout.VERTICAL);
-        layout.setPadding(48, 48, 48, 48);
+        ScrollView scroll = new ScrollView(this);
+        scroll.setBackgroundColor(PAGE_BG);
+        scroll.setFillViewport(true);
 
-        statusText = new TextView(this);
-        statusText.setText("Checking server...");
-        statusText.setTextSize(16);
-        statusText.setPadding(0, 0, 0, 24);
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        int pad16 = (int)(16 * dp);
+        root.setPadding(pad16, pad16, pad16, pad16);
 
-        guestBtn = new Button(this);
-        guestBtn.setText("Switch to Guest");
-        guestBtn.setEnabled(false);
-        guestBtn.setOnClickListener(v -> {
-            statusText.setText("Switching to Guest...");
-            execCommand("echo '===SWITCHING==='; nohup sh -c 'while true; do nc -l -p 12347 -4 sh; done' >/dev/null 2>&1 & sleep 1; am switch-user 10; echo 'SWITCH_EXIT='$?; nohup sh -c 'sleep 2 && am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS && sleep 1 && input keyevent 4 && cmd notification snooze --for 2147483647 \"10|com.android.systemui|70|null|10065\" && cmd notification snooze --for 2147483647 \"-1|android|62|null|1000\"' >/dev/null 2>&1 &", false, true);
-        });
-
-        ownerBtn = new Button(this);
-        ownerBtn.setText("Switch to Owner");
-        ownerBtn.setEnabled(false);
-        ownerBtn.setOnClickListener(v -> {
-            statusText.setText("Switching to Owner...");
-            execCommand("echo '===SWITCHING==='; am switch-user 0; echo 'SWITCH_EXIT='$?", false, true);
-        });
-
-        testBtn = new Button(this);
-        testBtn.setText("Test Server");
-        testBtn.setEnabled(false);
-        testBtn.setOnClickListener(v -> {
-            statusText.setText("Testing...");
-            execCommand("echo OK", true, true);
-        });
-
-        Button ladbBtn = new Button(this);
-        ladbBtn.setText("Open LADB");
-        ladbBtn.setOnClickListener(v -> openLadb());
-
-        Button retryBtn = new Button(this);
-        retryBtn.setText("Refresh");
-        retryBtn.setOnClickListener(v -> checkServer());
-
-        Button emergencyBtn = new Button(this);
-        emergencyBtn.setText("Emergency");
-        emergencyBtn.setOnClickListener(v -> emergencySwitch());
-
-        layout.addView(statusText);
-        layout.addView(guestBtn);
-        layout.addView(ownerBtn);
-        layout.addView(testBtn);
-        layout.addView(ladbBtn);
-        layout.addView(retryBtn);
-        layout.addView(emergencyBtn);
+        // â”€â”€ Status Card â”€â”€
+        LinearLayout statusCard = new LinearLayout(this);
+        statusCard.setOrientation(LinearLayout.HORIZONTAL);
+        statusCard.setGravity(Gravity.CENTER_VERTICAL);
+        int pad12 = (int)(12 * dp);
+        statusCard.setPadding(pad12, pad12, pad12, pad12);
+        statusCard.setElevation(2 * dp);
+        GradientDrawable cardBg = new GradientDrawable();
+        cardBg.setCornerRadius(12 * dp);
+        cardBg.setColor(CARD_BG);
+        statusCard.setBackground(cardBg);
+        LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT);
+        cardLp.setMargins(0, 0, 0, pad16);
+        statusCard.setLayoutParams(cardLp);
 
         indicator = new View(this);
-        int size = (int) (20 * getResources().getDisplayMetrics().density);
-        int margin = (int) (16 * getResources().getDisplayMetrics().density);
-        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(size, size);
-        lp.gravity = Gravity.TOP | Gravity.END;
-        lp.setMargins(0, margin, margin, 0);
-        indicator.setLayoutParams(lp);
+        int dotSize = (int)(12 * dp);
+        LinearLayout.LayoutParams dotLp = new LinearLayout.LayoutParams(dotSize, dotSize);
+        dotLp.setMargins(0, 0, (int)(8 * dp), 0);
+        indicator.setLayoutParams(dotLp);
         setIndicatorColor(0xff888888);
 
         loading = new ProgressBar(this);
-        FrameLayout.LayoutParams lpLoad = new FrameLayout.LayoutParams(
-            (int) (48 * getResources().getDisplayMetrics().density),
-            (int) (48 * getResources().getDisplayMetrics().density));
-        lpLoad.gravity = Gravity.CENTER;
-        loading.setLayoutParams(lpLoad);
+        int loadSize = (int)(18 * dp);
+        LinearLayout.LayoutParams loadLp = new LinearLayout.LayoutParams(loadSize, loadSize);
+        loadLp.setMargins(0, 0, (int)(8 * dp), 0);
+        loading.setLayoutParams(loadLp);
         loading.setVisibility(View.GONE);
 
-        root.addView(layout);
-        root.addView(indicator);
-        root.addView(loading);
-        setContentView(root);
+        statusText = new TextView(this);
+        statusText.setText("Checking server...");
+        statusText.setTextSize(14);
+        statusText.setTextColor(0xFF333333);
+        statusText.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
+
+        statusCard.addView(indicator);
+        statusCard.addView(loading);
+        statusCard.addView(statusText);
+
+        // â”€â”€ Section: Switch â”€â”€
+        TextView switchHeader = new TextView(this);
+        switchHeader.setText("SWITCH");
+        switchHeader.setTextSize(11);
+        switchHeader.setTextColor(0xFF999999);
+        int pad8 = (int)(8 * dp);
+        switchHeader.setPadding(0, 0, 0, pad8);
+
+        guestBtn = makePrimary("ðŸ  Switch to Guest");
+        guestBtn.setEnabled(false);
+        guestBtn.setOnClickListener(v -> {
+            setBtnLoading(guestBtn, true);
+            statusText.setText("Switching to Guest...");
+            setIndicatorColor(WARNING);
+            execCommand("echo '===SWITCHING==='; nohup sh -c 'while true; do nc -l -p 12347 -4 sh; done' >/dev/null 2>&1 & sleep 1; am switch-user 10; echo 'SWITCH_EXIT='$?; nohup sh -c 'sleep 2 && am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS && sleep 1 && input keyevent 4 && cmd notification snooze --for 2147483647 \"10|com.android.systemui|70|null|10065\" && cmd notification snooze --for 2147483647 \"-1|android|62|null|1000\"' >/dev/null 2>&1 &", false, true, guestBtn);
+        });
+
+        ownerBtn = makePrimary("ðŸ  Switch to Owner");
+        ownerBtn.setEnabled(false);
+        ownerBtn.setOnClickListener(v -> {
+            setBtnLoading(ownerBtn, true);
+            statusText.setText("Switching to Owner...");
+            setIndicatorColor(WARNING);
+            execCommand("echo '===SWITCHING==='; am switch-user 0; echo 'SWITCH_EXIT='$?", false, true, ownerBtn);
+        });
+
+        // â”€â”€ Section: Tools â”€â”€
+        TextView toolsHeader = new TextView(this);
+        toolsHeader.setText("TOOLS");
+        toolsHeader.setTextSize(11);
+        toolsHeader.setTextColor(0xFF999999);
+        toolsHeader.setPadding(0, pad16, 0, pad8);
+
+        testBtn = makeSecondary("ðŸ”§ Test Server");
+        testBtn.setEnabled(false);
+        testBtn.setOnClickListener(v -> {
+            setBtnLoading(testBtn, true);
+            statusText.setText("Testing...");
+            setIndicatorColor(WARNING);
+            execCommand("echo OK", true, true, testBtn);
+        });
+
+        Button ladbBtn = makeSecondary("ðŸ“¡ Open LADB");
+        ladbBtn.setOnClickListener(v -> openLadb());
+
+        Button retryBtn = makeSecondary("ðŸ”„ Refresh");
+        retryBtn.setOnClickListener(v -> checkServer());
+
+        // â”€â”€ Divider â”€â”€
+        View divider = new View(this);
+        LinearLayout.LayoutParams divLp = new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT, 1);
+        divLp.setMargins(0, pad16, 0, pad16);
+        divider.setLayoutParams(divLp);
+        divider.setBackgroundColor(0xFFE0E0E0);
+
+        // â”€â”€ Emergency â”€â”€
+        Button emergencyBtn = makeDanger("âš ï¸ Emergency");
+        emergencyBtn.setOnClickListener(v -> emergencySwitch());
+
+        // â”€â”€ Footer â”€â”€
+        TextView footer = new TextView(this);
+        java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault());
+        String timeStr = sdf.format(new java.util.Date());
+        footer.setText("Last updated: " + timeStr);
+        footer.setTextSize(11);
+        footer.setTextColor(0xFFBBBBBB);
+        footer.setGravity(Gravity.CENTER_HORIZONTAL);
+        footer.setPadding(0, pad16, 0, 0);
+
+        // â”€â”€ Assemble â”€â”€
+        root.addView(statusCard);
+        root.addView(switchHeader);
+        root.addView(guestBtn);
+        root.addView(ownerBtn);
+        root.addView(toolsHeader);
+        root.addView(testBtn);
+        root.addView(ladbBtn);
+        root.addView(retryBtn);
+        root.addView(divider);
+        root.addView(emergencyBtn);
+        root.addView(footer);
+
+        scroll.addView(root);
+        setContentView(scroll);
 
         embeddedServer = new EmbeddedServer();
         embeddedServer.start();
         registerTile();
     }
 
+    private Button makePrimary(String text) {
+        final float dp = getResources().getDisplayMetrics().density;
+        Button btn = new Button(this, null, android.R.attr.borderlessButtonStyle);
+        btn.setText(text);
+        btn.setTextSize(14);
+        btn.setTextColor(0xFFFFFFFF);
+        btn.setAllCaps(false);
+        btn.setMinHeight(0);
+        btn.setMinimumHeight(0);
+        GradientDrawable bg = new GradientDrawable();
+        bg.setCornerRadius(10 * dp);
+        bg.setColor(ACCENT);
+        btn.setBackground(bg);
+        btn.setElevation(3 * dp);
+        int pv = (int)(14 * dp);
+        int ph = (int)(20 * dp);
+        btn.setPadding(ph, pv, ph, pv);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+        lp.setMargins(0, 0, 0, (int)(8 * dp));
+        btn.setLayoutParams(lp);
+        return btn;
+    }
+
+    private Button makeSecondary(String text) {
+        final float dp = getResources().getDisplayMetrics().density;
+        Button btn = new Button(this, null, android.R.attr.borderlessButtonStyle);
+        btn.setText(text);
+        btn.setTextSize(14);
+        btn.setTextColor(0xFF666666);
+        btn.setAllCaps(false);
+        btn.setMinHeight(0);
+        btn.setMinimumHeight(0);
+        GradientDrawable bg = new GradientDrawable();
+        bg.setCornerRadius(10 * dp);
+        bg.setColor(CARD_BG);
+        bg.setStroke((int)(1 * dp + 0.5f), 0xFFD0D0D0);
+        btn.setBackground(bg);
+        int pv = (int)(12 * dp);
+        int ph = (int)(20 * dp);
+        btn.setPadding(ph, pv, ph, pv);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+        lp.setMargins(0, 0, 0, (int)(8 * dp));
+        btn.setLayoutParams(lp);
+        return btn;
+    }
+
+    private Button makeDanger(String text) {
+        final float dp = getResources().getDisplayMetrics().density;
+        Button btn = new Button(this, null, android.R.attr.borderlessButtonStyle);
+        btn.setText(text);
+        btn.setTextSize(14);
+        btn.setTextColor(0xFFFFFFFF);
+        btn.setAllCaps(false);
+        btn.setMinHeight(0);
+        btn.setMinimumHeight(0);
+        GradientDrawable bg = new GradientDrawable();
+        bg.setCornerRadius(10 * dp);
+        bg.setColor(DANGER);
+        btn.setBackground(bg);
+        int pv = (int)(14 * dp);
+        int ph = (int)(20 * dp);
+        btn.setPadding(ph, pv, ph, pv);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+        lp.setMargins(0, 0, 0, 0);
+        btn.setLayoutParams(lp);
+        return btn;
+    }
+
+    private void setBtnLoading(Button btn, boolean loading) {
+        btn.setEnabled(!loading);
+        if (loading) {
+            btn.setTag(btn.getText().toString());
+            btn.setText("◌ " + btn.getText().toString().replaceAll("[^\\p{L} ]", "").trim());
+        } else {
+            Object orig = btn.getTag();
+            if (orig != null) btn.setText((String) orig);
+        }
+    }
+    private void restoreBtn(Button btn) {
+        if (btn != null) setBtnLoading(btn, false);
+    }
+
     private void emergencySwitch() {
         polling = true;
         loading.setVisibility(View.VISIBLE);
         statusText.setText("Switching to Guest mode...");
+        setIndicatorColor(WARNING);
         new Thread(() -> {
             boolean online = checkServerSync(PORT_SHELL, PORT_PERSISTENT);
             runOnUiThread(() -> {
                 if (online) {
                     polling = false;
                     loading.setVisibility(View.GONE);
-                    setIndicatorColor(0xff00cc00);
+                    setIndicatorColor(SUCCESS);
                     doSwitch();
                 } else {
                     openLadb();
                     statusText.setText("Waiting Server");
+                    setIndicatorColor(WARNING);
                     scheduleAlarmPoll();
                     handler.postDelayed(() -> {
                         try {
@@ -160,6 +314,7 @@ public class MainActivity extends Activity {
     private void startPolling() {
         if (!polling) return;
         statusText.setText("Waiting Server");
+        setIndicatorColor(WARNING);
         handler.removeCallbacks(pollRunnable);
         handler.post(pollRunnable);
     }
@@ -174,8 +329,8 @@ public class MainActivity extends Activity {
                     if (online) {
                         polling = false;
                         loading.setVisibility(View.GONE);
-                        setIndicatorColor(0xff00cc00);
-                        statusText.setText("Server found, waiting for restart...");
+                        setIndicatorColor(SUCCESS);
+                        statusText.setText("Switching to Guest mode...");
                         handler.removeCallbacks(pollRunnable);
                         handler.postDelayed(() -> {
                             statusText.setText("Switching to Guest mode...");
@@ -192,7 +347,7 @@ public class MainActivity extends Activity {
 
     private void doSwitch() {
         statusText.setText("Switching to Guest...");
-        execCommand("echo '===SWITCHING==='; nohup sh -c 'while true; do nc -l -p 12347 -4 sh; done' >/dev/null 2>&1 & sleep 1; am switch-user 10; echo 'SWITCH_EXIT='$?; nohup sh -c 'sleep 2 && am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS && sleep 1 && input keyevent 4 && cmd notification snooze --for 2147483647 \"10|com.android.systemui|70|null|10065\" && cmd notification snooze --for 2147483647 \"-1|android|62|null|1000\"' >/dev/null 2>&1 &", false, true);
+        execCommand("echo '===SWITCHING==='; nohup sh -c 'while true; do nc -l -p 12347 -4 sh; done' >/dev/null 2>&1 & sleep 1; am switch-user 10; echo 'SWITCH_EXIT='$?; nohup sh -c 'sleep 2 && am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS && sleep 1 && input keyevent 4 && cmd notification snooze --for 2147483647 \"10|com.android.systemui|70|null|10065\" && cmd notification snooze --for 2147483647 \"-1|android|62|null|1000\"' >/dev/null 2>&1 &", false, true, null);
     }
 
     private boolean checkServerSync(int... ports) {
@@ -223,16 +378,18 @@ public class MainActivity extends Activity {
         try {
             Intent intent = getPackageManager().getLaunchIntentForPackage("com.draco.ladb");
             if (intent == null) {
-                statusText.setText("LADB not installed");
+                statusText.setText("LADB is not installed");
                 loading.setVisibility(View.GONE);
+                setIndicatorColor(OFFLINE);
                 polling = false;
                 return;
             }
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             startActivity(intent);
         } catch (Exception e) {
-            statusText.setText("Error: " + e.getClass().getSimpleName());
+            statusText.setText("Could not open LADB");
             loading.setVisibility(View.GONE);
+            setIndicatorColor(OFFLINE);
             polling = false;
         }
     }
@@ -258,7 +415,8 @@ public class MainActivity extends Activity {
         if (intent != null && intent.getBooleanExtra("emergency_poll", false)) {
             intent.removeExtra("emergency_poll");
             polling = true;
-            statusText.setText("Waiting for server...");
+            statusText.setText("Waiting Server");
+            setIndicatorColor(WARNING);
             loading.setVisibility(View.VISIBLE);
             startPolling();
         } else if (!polling) {
@@ -276,7 +434,8 @@ public class MainActivity extends Activity {
     private void setIndicatorColor(int color) {
         GradientDrawable circle = new GradientDrawable();
         circle.setShape(GradientDrawable.OVAL);
-        circle.setSize(20, 20);
+        float dp = getResources().getDisplayMetrics().density;
+        circle.setSize((int)(12 * dp), (int)(12 * dp));
         circle.setColor(color);
         indicator.setBackground(circle);
     }
@@ -299,8 +458,8 @@ public class MainActivity extends Activity {
             }
             final int fLevel = level;
             runOnUiThread(() -> {
-                int[] colors = {0xffcc0000, 0xffff8800, 0xff00cc00};
-                String[] texts = {"server is offline", "embedded only", "server is online"};
+                int[] colors = {OFFLINE, WARNING, SUCCESS};
+                String[] texts = {"Disconnected", "Limited", "Connected"};
                 setIndicatorColor(colors[fLevel]);
                 statusText.setText(texts[fLevel]);
                 boolean enabled = fLevel == 2;
@@ -308,23 +467,21 @@ public class MainActivity extends Activity {
                 ownerBtn.setEnabled(enabled);
                 testBtn.setEnabled(enabled);
                 loading.setVisibility(View.GONE);
+                restoreBtn(guestBtn);
+                restoreBtn(ownerBtn);
+                restoreBtn(testBtn);
             });
         }).start();
     }
 
     private void execCommand(final String cmd) {
-        execCommand(cmd, false, false);
+        execCommand(cmd, false, false, null);
     }
 
-    private void execCommand(final String cmd, final boolean simple) {
-        execCommand(cmd, simple, false);
-    }
-
-    private void execCommand(final String cmd, final boolean simple, final boolean shellOnly) {
+    private void execCommand(final String cmd, final boolean simple, final boolean shellOnly, final Button triggerBtn) {
         final int[] tryPorts = shellOnly ? new int[]{PORT_SHELL, PORT_PERSISTENT} : new int[]{PORT_SHELL, PORT_PERSISTENT, PORT_EMBEDDED};
         loading.setVisibility(View.VISIBLE);
         new Thread(() -> {
-            String lastError = "";
             String result = null;
             for (int port : tryPorts) {
                 Socket s = null;
@@ -355,21 +512,21 @@ public class MainActivity extends Activity {
                     }
                     break;
                 } catch (Exception e) {
-                    lastError = e.getClass().getSimpleName() + ": " + e.getMessage();
                 } finally {
                     if (s != null) try { s.close(); } catch (Exception e) {}
                 }
             }
             final String finalResult = result;
-            final String finalError = simple ? "Error" : "Error: " + lastError;
             runOnUiThread(() -> {
                 loading.setVisibility(View.GONE);
+                restoreBtn(triggerBtn);
                 if (finalResult != null) {
                     statusText.setText(finalResult);
-                    setIndicatorColor(0xff00cc00);
+                    if (!"OK".equals(finalResult))
+                        setIndicatorColor(SUCCESS);
                 } else {
-                    statusText.setText(finalError);
-                    setIndicatorColor(0xffcc0000);
+                    statusText.setText("Connection failed");
+                    setIndicatorColor(OFFLINE);
                     guestBtn.setEnabled(false);
                     ownerBtn.setEnabled(false);
                 }
@@ -431,3 +588,4 @@ public class MainActivity extends Activity {
         }
     }
 }
+

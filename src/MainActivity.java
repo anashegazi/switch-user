@@ -118,14 +118,9 @@ public class MainActivity extends Activity {
     }
 
     private void startLadb() {
-        try {
-            Runtime.getRuntime().exec("nohup sh /data/local/tmp/gsw/server.sh >/dev/null 2>&1 &");
-        } catch (Exception e) {
-            // ignore - this will run as app UID, but maybe nc starts
-        }
         Intent intent = getPackageManager().getLaunchIntentForPackage("com.draco.ladb");
         if (intent != null) {
-            statusText.setText("LADB startup cmd:\nnohup sh /data/local/tmp/gsw/server.sh\n>/dev/null 2>&1 &");
+            statusText.setText("Open LADB, tap Connect,\nthen return & tap Refresh");
             startActivity(intent);
         } else {
             statusText.setText("LADB not installed.\nInstall from Play Store.");

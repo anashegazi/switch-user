@@ -11,7 +11,7 @@ $env:PATH = "$buildTools;$javaHome\bin;$env:PATH"
 
 Write-Output "=== Step 1: Compile Java to .class ==="
 New-Item -ItemType Directory -Path "$projectDir\out\classes" -Force | Out-Null
-& "$javaHome\bin\javac.exe" --release 11 -classpath "$platform\android.jar" -d "$projectDir\out\classes" "$projectDir\src\MainActivity.java" "$projectDir\src\StatusService.java" "$projectDir\src\SwitchTileService.java"
+& "$javaHome\bin\javac.exe" --release 11 -classpath "$platform\android.jar" -d "$projectDir\out\classes" "$projectDir\src\MainActivity.java" "$projectDir\src\SwitchTileService.java"
 if ($LASTEXITCODE -ne 0) { throw "javac failed" }
 
 Write-Output "=== Step 2: Convert .class to .dex ==="

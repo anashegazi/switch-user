@@ -25,7 +25,7 @@ New-Item -ItemType Directory -Path "$projectDir\out\res" -Force | Out-Null
 & "$buildTools\aapt2.exe" compile -o "$projectDir\out\res\res.zip" --dir "$projectDir\res" 2>$null
 
 Write-Output "=== Step 4: Link APK ==="
-& "$buildTools\aapt2.exe" link --manifest "$projectDir\androidmanifest.xml" `
+& "$buildTools\aapt2.exe" link -R "$projectDir\out\res\res.zip" --manifest "$projectDir\androidmanifest.xml" `
     -I "$platform\android.jar" `
     --java "$projectDir\out\gen" `
     -o "$projectDir\out\unaligned.apk" `

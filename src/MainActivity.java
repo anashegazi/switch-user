@@ -2,7 +2,6 @@ package com.guest.switcher;
 
 import android.app.Activity;
 import android.content.ComponentName;
-import android.content.Intent;
 import android.os.AsyncTask;
 import android.os.Build;
 import android.os.Bundle;
@@ -75,7 +74,7 @@ public class MainActivity extends Activity {
             @Override
             public void onClick(View v) {
                 statusText.setText("Testing...");
-                execCommand("echo OK; id; whoami");
+                execCommand("echo OK", true);
             }
         });
 
@@ -88,21 +87,11 @@ public class MainActivity extends Activity {
             }
         });
 
-        Button ladbBtn = new Button(this);
-        ladbBtn.setText("Start Server via LADB");
-        ladbBtn.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                startLadb();
-            }
-        });
-
         layout.addView(statusText);
         layout.addView(guestBtn);
         layout.addView(ownerBtn);
         layout.addView(testBtn);
         layout.addView(retryBtn);
-        layout.addView(ladbBtn);
         setContentView(layout);
 
         embeddedServer = new EmbeddedServer();
@@ -114,16 +103,6 @@ public class MainActivity extends Activity {
     private void registerTile() {
         if (Build.VERSION.SDK_INT >= 33) {
             TileService.requestListeningState(this, new ComponentName(this, SwitchTileService.class));
-        }
-    }
-
-    private void startLadb() {
-        Intent intent = getPackageManager().getLaunchIntentForPackage("com.draco.ladb");
-        if (intent != null) {
-            statusText.setText("Open LADB, tap Connect,\nthen return & tap Refresh");
-            startActivity(intent);
-        } else {
-            statusText.setText("LADB not installed.\nInstall from Play Store.");
         }
     }
 
@@ -165,6 +144,10 @@ public class MainActivity extends Activity {
     }
 
     private void execCommand(final String cmd) {
+        execCommand(cmd, false);
+    }
+
+    private void execCommand(final String cmd, final boolean simple) {
         final int port = activePort;
         new AsyncTask<Void, Void, String>() {
             @Override
@@ -192,8 +175,10 @@ public class MainActivity extends Activity {
 
                     String outText = result.toString().trim();
                     if (outText.isEmpty()) return "OK";
+                    if (simple) return "OK";
                     return outText;
                 } catch (Exception e) {
+                    if (simple) return "Error";
                     return "Error: " + e.getClass().getSimpleName() + ": " + e.getMessage();
                 } finally {
                     if (s != null) try { s.close(); } catch (Exception e) {}
@@ -205,12 +190,8 @@ public class MainActivity extends Activity {
                 statusText.setText(result);
                 Toast.makeText(MainActivity.this, result, Toast.LENGTH_SHORT).show();
                 if (result.startsWith("Error") || result.equals("Server not running")) {
-                    if (result.contains("Security") || result.contains("Permission")) {
-                        startLadb();
-                    } else {
-                        guestBtn.setEnabled(false);
-                        ownerBtn.setEnabled(false);
-                    }
+                    guestBtn.setEnabled(false);
+                    ownerBtn.setEnabled(false);
                 }
             }
         }.execute();

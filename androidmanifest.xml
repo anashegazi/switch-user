@@ -10,6 +10,8 @@
 
     <application
         android:label="Guest Switcher"
+        android:icon="@drawable/ic_launcher"
+        android:roundIcon="@drawable/ic_launcher"
         android:allowBackup="false"
         android:supportsRtl="true">
 
@@ -27,8 +29,8 @@
             android:name=".SwitchTileService"
             android:exported="true"
             android:permission="android.permission.BIND_QUICK_SETTINGS_TILE"
-            android:label="Switch to Guest"
-            android:icon="@android:drawable/ic_menu_manage">
+            android:label="Guest Switcher"
+            android:icon="@drawable/ic_launcher">
             <intent-filter>
                 <action android:name="android.service.quicksettings.action.QS_TILE" />
             </intent-filter>

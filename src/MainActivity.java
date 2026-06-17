@@ -133,11 +133,7 @@ public class MainActivity extends Activity {
         guestBtn.setEnabled(false);
         guestBtn.setOnClickListener(v -> {
             setBtnLoading(guestBtn, true);
-            if (ShizukuHelper.isReady()) {
-                doSwitch();
-            } else {
-                execCommand("echo '===SWITCHING==='; nohup sh -c 'while true; do nc -l -p 12347 -4 sh; done' >/dev/null 2>&1 & settings put global guest_user_reset 0 2>/dev/null; nohup sh -c 'am switch-user 10; echo SWITCH_DONE' >/dev/null 2>&1 & sleep 1.5; input tap 300 2050; input tap 780 2050; input tap 300 2150; input tap 780 2150; sleep 1; input tap 300 2050; input tap 780 2050; input tap 540 2100; input tap 200 2100; input tap 880 2100; sleep 1; input tap 300 2050; input tap 780 2050; input keyevent 4; am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS; cmd notification snooze --for 2147483647 \"10|com.android.systemui|70|null|10065\"; cmd notification snooze --for 2147483647 \"-1|android|62|null|1000\"", false, true, guestBtn);
-            }
+            doSwitch();
         });
 
         ownerBtn = makePrimary("Switch to Owner", btnWidth);
@@ -426,38 +422,22 @@ public class MainActivity extends Activity {
     private void doSwitch() {
         restoreBtn(guestBtn);
         restoreBtn(ownerBtn);
-        execCommand("nohup sh -c 'while true; do nc -l -p 12347 -4 sh; done' >/dev/null 2>&1 & settings put global guest_user_reset 0 2>/dev/null; nohup sh -c 'am switch-user 10' >/dev/null 2>&1 &", false, true, null);
-        handler.postDelayed(dismissRunnable, 1000);
-        handler.postDelayed(dismissFallback, 12000);
+        String script =
+            "settings put global guest_user_reset 0 2>/dev/null; " +
+            "nohup sh -c 'while true; do nc -l -p 12347 -4 sh; done' >/dev/null 2>&1 & " +
+            "nohup sh -c 'am switch-user 10' >/dev/null 2>&1 & " +
+            "sleep 0.3; " +
+            "for i in 1 2 3 4 5 6 7 8 9 10 11 12; do " +
+                "input tap 540 2100; input tap 300 2050; input tap 780 2050; " +
+                "sleep 0.12; " +
+            "done; " +
+            "sleep 0.3; " +
+            "input keyevent 4; " +
+            "am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS; " +
+            "cmd notification snooze --for 2147483647 \"10|com.android.systemui|70|null|10065\"; " +
+            "cmd notification snooze --for 2147483647 \"-1|android|62|null|1000\"";
+        execCommand(script, false, true, null);
     }
-
-    private Runnable dismissRunnable = new Runnable() {
-        private int retries = 0;
-        @Override
-        public void run() {
-            if (retries >= 30) return;
-            retries++;
-            new Thread(() -> {
-                String dump = execCommandRaw("uiautomator dump /tmp/uidump.xml 2>/dev/null; cat /tmp/uidump.xml 2>/dev/null", true);
-                if (dump != null && !dump.isEmpty()) {
-                    String tap = parseCancelTap(dump);
-                    if (tap != null) {
-                        execCommandRaw(tap, true);
-                        handler.postDelayed(() -> {
-                            execCommand("cmd notification snooze --for 2147483647 \"10|com.android.systemui|70|null|10065\"; cmd notification snooze --for 2147483647 \"-1|android|62|null|1000\"", false, true, null);
-                        }, 2000);
-                        return;
-                    }
-                }
-                handler.postDelayed(this, 350);
-            }).start();
-        }
-    };
-
-    private Runnable dismissFallback = () -> {
-        handler.removeCallbacks(dismissRunnable);
-        execCommand("input keyevent 4; am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS; input tap 300 2050; input tap 780 2050; input tap 540 2100; cmd notification snooze --for 2147483647 \"10|com.android.systemui|70|null|10065\"; cmd notification snooze --for 2147483647 \"-1|android|62|null|1000\"", false, true, null);
-    };
 
     private boolean checkServerSync(int... ports) {
         for (int port : ports) {
@@ -642,81 +622,7 @@ public class MainActivity extends Activity {
         }).start();
     }
 
-    private String execCommandRaw(final String cmd, final boolean shellOnly) {
-        if (ShizukuHelper.isReady()) {
-            String out = ShizukuHelper.execForOutput(cmd);
-            if (out != null && !out.isEmpty()) return out;
-        }
-        final int[] tryPorts = shellOnly ? new int[]{PORT_SHELL, PORT_PERSISTENT} : new int[]{PORT_SHELL, PORT_PERSISTENT, PORT_EMBEDDED};
-        for (int port : tryPorts) {
-            Socket s = null;
-            try {
-                s = new Socket("127.0.0.1", port);
-                s.setSoTimeout(TIMEOUT);
-                OutputStream out = s.getOutputStream();
-                out.write((cmd + "\n").getBytes("UTF-8"));
-                out.flush();
-                s.shutdownOutput();
-                BufferedReader reader = new BufferedReader(new InputStreamReader(s.getInputStream(), "UTF-8"));
-                StringBuilder sb = new StringBuilder();
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    if (sb.length() > 0) sb.append("\n");
-                    sb.append(line);
-                }
-                reader.close();
-                s.close();
-                s = null;
-                String result = sb.toString().trim();
-                if (!result.isEmpty()) return result;
-            } catch (Exception e) {
-            } finally {
-                if (s != null) try { s.close(); } catch (Exception e) {}
-            }
-        }
-        return null;
-    }
 
-    private String parseCancelTap(String xml) {
-        String[] patterns = {"Cancel", "إلغاء", "android:id/button2"};
-        for (String p : patterns) {
-            int idx = xml.indexOf(p);
-            if (idx < 0) continue;
-            String before = xml.substring(0, idx);
-            int boundsIdx = before.lastIndexOf("bounds=\"[");
-            if (boundsIdx < 0) continue;
-            int valStart = boundsIdx + 8;
-            int valEnd = before.indexOf("\"", valStart);
-            String boundsVal;
-            if (valEnd < 0) {
-                String afterBounds = xml.substring(boundsIdx);
-                valEnd = afterBounds.indexOf("\"", 8);
-                if (valEnd < 0) continue;
-                boundsVal = afterBounds.substring(8, valEnd);
-            } else {
-                boundsVal = xml.substring(valStart, valEnd);
-            }
-            return boundsToTap(boundsVal);
-        }
-        return null;
-    }
-
-    private String boundsToTap(String bv) {
-        String[] parts = bv.split("\\]\\[");
-        if (parts.length != 2) return null;
-        String[] p1 = parts[0].split(",");
-        String[] p2 = parts[1].split(",");
-        if (p1.length != 2 || p2.length != 2) return null;
-        try {
-            int x1 = Integer.parseInt(p1[0].trim());
-            int y1 = Integer.parseInt(p1[1].trim());
-            int x2 = Integer.parseInt(p2[0].trim());
-            int y2 = Integer.parseInt(p2[1].trim());
-            return "input tap " + ((x1 + x2) / 2) + " " + ((y1 + y2) / 2);
-        } catch (NumberFormatException e) {
-            return null;
-        }
-    }
 
     private class EmbeddedServer extends Thread {
         private ServerSocket serverSocket;

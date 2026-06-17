@@ -459,17 +459,18 @@ public class MainActivity extends Activity {
 
     private void openShizuku() {
         try {
-            Intent intent = getPackageManager().getLaunchIntentForPackage("moe.shizuku.manager");
-            if (intent == null) {
-                intent = getPackageManager().getLaunchIntentForPackage("rikka.shizuku");
-            }
-            if (intent == null) {
-                intent = new Intent(Intent.ACTION_VIEW,
-                    android.net.Uri.parse("https://shizuku.rikka.app/download/"));
-            }
+            Intent intent = new Intent(Intent.ACTION_MAIN);
+            intent.setPackage("moe.shizuku.manager");
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             startActivity(intent);
-        } catch (Exception e) {}
+        } catch (Exception e) {
+            try {
+                Intent intent = new Intent(Intent.ACTION_VIEW,
+                    android.net.Uri.parse("https://shizuku.rikka.app/download/"));
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                startActivity(intent);
+            } catch (Exception e2) {}
+        }
     }
 
     @Override

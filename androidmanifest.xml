@@ -13,7 +13,6 @@
     <uses-permission android:name="moe.shizuku.manager.permission.API_V23" />
 
     <queries>
-        <package android:name="com.draco.ladb" />
         <package android:name="moe.shizuku.manager" />
         <package android:name="rikka.shizuku" />
     </queries>

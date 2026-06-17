@@ -28,6 +28,8 @@ import java.io.OutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
 
+import android.content.pm.PackageManager;
+
 public class MainActivity extends Activity {
 
     private static final int PORT_SHELL = 12345;
@@ -131,7 +133,11 @@ public class MainActivity extends Activity {
         guestBtn.setEnabled(false);
         guestBtn.setOnClickListener(v -> {
             setBtnLoading(guestBtn, true);
-            execCommand("echo '===SWITCHING==='; nohup sh -c 'while true; do nc -l -p 12347 -4 sh; done' >/dev/null 2>&1 & settings put global guest_user_reset 0 2>/dev/null; nohup sh -c 'am switch-user 10; echo SWITCH_DONE' >/dev/null 2>&1 & sleep 1.5; input tap 300 2050; input tap 780 2050; input tap 300 2150; input tap 780 2150; sleep 1; input tap 300 2050; input tap 780 2050; input tap 540 2100; input tap 200 2100; input tap 880 2100; sleep 1; input tap 300 2050; input tap 780 2050; input keyevent 4; am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS; cmd notification snooze --for 2147483647 \"10|com.android.systemui|70|null|10065\"; cmd notification snooze --for 2147483647 \"-1|android|62|null|1000\"", false, true, guestBtn);
+            if (ShizukuHelper.isReady()) {
+                doSwitch();
+            } else {
+                execCommand("echo '===SWITCHING==='; nohup sh -c 'while true; do nc -l -p 12347 -4 sh; done' >/dev/null 2>&1 & settings put global guest_user_reset 0 2>/dev/null; nohup sh -c 'am switch-user 10; echo SWITCH_DONE' >/dev/null 2>&1 & sleep 1.5; input tap 300 2050; input tap 780 2050; input tap 300 2150; input tap 780 2150; sleep 1; input tap 300 2050; input tap 780 2050; input tap 540 2100; input tap 200 2100; input tap 880 2100; sleep 1; input tap 300 2050; input tap 780 2050; input keyevent 4; am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS; cmd notification snooze --for 2147483647 \"10|com.android.systemui|70|null|10065\"; cmd notification snooze --for 2147483647 \"-1|android|62|null|1000\"", false, true, guestBtn);
+            }
         });
 
         ownerBtn = makePrimary("Switch to Owner", btnWidth);
@@ -151,6 +157,9 @@ public class MainActivity extends Activity {
         Button ladbBtn = makeSecondary("Open LADB", btnWidth);
         ladbBtn.setOnClickListener(v -> openLadb());
 
+        Button shizukuBtn = makeSecondary("Open Shizuku", btnWidth);
+        shizukuBtn.setOnClickListener(v -> openShizuku());
+
         Button retryBtn = makeSecondary("Refresh", btnWidth);
         retryBtn.setOnClickListener(v -> checkServer());
 
@@ -167,6 +176,7 @@ public class MainActivity extends Activity {
         root.addView(makeDivider());
         root.addView(testBtn);
         root.addView(ladbBtn);
+        root.addView(shizukuBtn);
         root.addView(retryBtn);
 
         View emergDiv = makeDivider();
@@ -182,6 +192,13 @@ public class MainActivity extends Activity {
         embeddedServer = new EmbeddedServer();
         embeddedServer.start();
         registerTile();
+
+        ShizukuHelper.init();
+        ShizukuHelper.addPermissionListener((requestCode, grantResult) -> {
+            if (grantResult == PackageManager.PERMISSION_GRANTED) {
+                checkServer();
+            }
+        });
     }
 
     private Button makePrimary(String text, int width) {
@@ -407,6 +424,8 @@ public class MainActivity extends Activity {
     };
 
     private void doSwitch() {
+        restoreBtn(guestBtn);
+        restoreBtn(ownerBtn);
         execCommand("nohup sh -c 'while true; do nc -l -p 12347 -4 sh; done' >/dev/null 2>&1 & settings put global guest_user_reset 0 2>/dev/null; nohup sh -c 'am switch-user 10' >/dev/null 2>&1 &", false, true, null);
         handler.postDelayed(dismissRunnable, 1000);
         handler.postDelayed(dismissFallback, 12000);
@@ -478,6 +497,21 @@ public class MainActivity extends Activity {
         }
     }
 
+    private void openShizuku() {
+        try {
+            Intent intent = getPackageManager().getLaunchIntentForPackage("moe.shizuku.manager");
+            if (intent == null) {
+                intent = getPackageManager().getLaunchIntentForPackage("rikka.shizuku");
+            }
+            if (intent == null) {
+                intent = new Intent(Intent.ACTION_VIEW,
+                    android.net.Uri.parse("https://shizuku.rikka.app/download/"));
+            }
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(intent);
+        } catch (Exception e) {}
+    }
+
     @Override
     protected void onPause() {
         super.onPause();
@@ -502,6 +536,10 @@ public class MainActivity extends Activity {
             setChip(WARNING, "Waiting Server\u2026");
             startPolling();
         } else if (!polling) {
+            if (ShizukuHelper.isRunning() && !ShizukuHelper.isPermissionGranted()) {
+                setChip(WARNING, "Grant Shizuku permission\u2026");
+                ShizukuHelper.requestPermission(1001);
+            }
             checkServer();
         }
     }
@@ -522,7 +560,9 @@ public class MainActivity extends Activity {
     private void checkServer() {
         new Thread(() -> {
             int level;
-            if (checkServerSync(PORT_SHELL, PORT_PERSISTENT)) {
+            if (ShizukuHelper.isReady()) {
+                level = 3;
+            } else if (checkServerSync(PORT_SHELL, PORT_PERSISTENT)) {
                 level = 2;
             } else if (checkServerSync(PORT_EMBEDDED)) {
                 level = 1;
@@ -531,14 +571,15 @@ public class MainActivity extends Activity {
             }
             final int fLevel = level;
             runOnUiThread(() -> {
-                boolean enabled = fLevel == 2;
+                boolean enabled = fLevel == 3 || fLevel == 2;
                 guestBtn.setEnabled(enabled);
                 ownerBtn.setEnabled(enabled);
                 testBtn.setEnabled(enabled);
                 restoreBtn(guestBtn);
                 restoreBtn(ownerBtn);
                 restoreBtn(testBtn);
-                if (fLevel == 2) setChip(SUCCESS, "Connected");
+                if (fLevel == 3) setChip(ACCENT, "Shizuku");
+                else if (fLevel == 2) setChip(SUCCESS, "Connected");
                 else if (fLevel == 1) setChip(WARNING, "Limited");
                 else setChip(OFFLINE, "Disconnected");
             });
@@ -550,40 +591,44 @@ public class MainActivity extends Activity {
     }
 
     private void execCommand(final String cmd, final boolean simple, final boolean shellOnly, final Button triggerBtn) {
-        final int[] tryPorts = shellOnly ? new int[]{PORT_SHELL, PORT_PERSISTENT} : new int[]{PORT_SHELL, PORT_PERSISTENT, PORT_EMBEDDED};
         new Thread(() -> {
             String result = null;
-            for (int port : tryPorts) {
-                Socket s = null;
-                try {
-                    s = new Socket("127.0.0.1", port);
-                    s.setSoTimeout(TIMEOUT);
-                    OutputStream out = s.getOutputStream();
-                    out.write((cmd + "\n").getBytes("UTF-8"));
-                    out.flush();
-                    s.shutdownOutput();
-
-                    BufferedReader reader = new BufferedReader(new InputStreamReader(s.getInputStream(), "UTF-8"));
-                    StringBuilder sb = new StringBuilder();
-                    String line;
-                    while ((line = reader.readLine()) != null) {
-                        if (sb.length() > 0) sb.append("\n");
-                        sb.append(line);
+            if (ShizukuHelper.isReady()) {
+                String out = ShizukuHelper.execForOutput(cmd);
+                if (out != null) result = simple ? "OK" : (out.isEmpty() ? "OK" : out);
+            }
+            if (result == null) {
+                final int[] tryPorts = shellOnly ? new int[]{PORT_SHELL, PORT_PERSISTENT} : new int[]{PORT_SHELL, PORT_PERSISTENT, PORT_EMBEDDED};
+                for (int port : tryPorts) {
+                    Socket s = null;
+                    try {
+                        s = new Socket("127.0.0.1", port);
+                        s.setSoTimeout(TIMEOUT);
+                        OutputStream out = s.getOutputStream();
+                        out.write((cmd + "\n").getBytes("UTF-8"));
+                        out.flush();
+                        s.shutdownOutput();
+                        BufferedReader reader = new BufferedReader(new InputStreamReader(s.getInputStream(), "UTF-8"));
+                        StringBuilder sb = new StringBuilder();
+                        String line;
+                        while ((line = reader.readLine()) != null) {
+                            if (sb.length() > 0) sb.append("\n");
+                            sb.append(line);
+                        }
+                        reader.close();
+                        s.close();
+                        s = null;
+                        String outText = sb.toString().trim();
+                        if (outText.isEmpty() || simple) {
+                            result = "OK";
+                        } else {
+                            result = outText;
+                        }
+                        break;
+                    } catch (Exception e) {
+                    } finally {
+                        if (s != null) try { s.close(); } catch (Exception e) {}
                     }
-                    reader.close();
-                    s.close();
-                    s = null;
-
-                    String outText = sb.toString().trim();
-                    if (outText.isEmpty() || simple) {
-                        result = "OK";
-                    } else {
-                        result = outText;
-                    }
-                    break;
-                } catch (Exception e) {
-                } finally {
-                    if (s != null) try { s.close(); } catch (Exception e) {}
                 }
             }
             final String finalResult = result;
@@ -598,6 +643,10 @@ public class MainActivity extends Activity {
     }
 
     private String execCommandRaw(final String cmd, final boolean shellOnly) {
+        if (ShizukuHelper.isReady()) {
+            String out = ShizukuHelper.execForOutput(cmd);
+            if (out != null && !out.isEmpty()) return out;
+        }
         final int[] tryPorts = shellOnly ? new int[]{PORT_SHELL, PORT_PERSISTENT} : new int[]{PORT_SHELL, PORT_PERSISTENT, PORT_EMBEDDED};
         for (int port : tryPorts) {
             Socket s = null;

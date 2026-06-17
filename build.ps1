@@ -11,13 +11,14 @@ $env:PATH = "$buildTools;$javaHome\bin;$env:PATH"
 
 Write-Output "=== Step 1: Compile Java to .class ==="
 New-Item -ItemType Directory -Path "$projectDir\out\classes" -Force | Out-Null
-& "$javaHome\bin\javac.exe" --release 11 -encoding utf8 -classpath "$platform\android.jar" -d "$projectDir\out\classes" "$projectDir\src\MainActivity.java" "$projectDir\src\SwitchTileService.java" "$projectDir\src\PollReceiver.java"
+$shizukuLibs = "$projectDir\lib\shizuku-api.jar;$projectDir\lib\shizuku-aidl.jar;$projectDir\lib\shizuku-provider.jar"
+& "$javaHome\bin\javac.exe" --release 11 -encoding utf8 -classpath "$platform\android.jar;$shizukuLibs" -d "$projectDir\out\classes" "$projectDir\src\MainActivity.java" "$projectDir\src\SwitchTileService.java" "$projectDir\src\PollReceiver.java" "$projectDir\src\ShizukuHelper.java"
 if ($LASTEXITCODE -ne 0) { throw "javac failed" }
 
 Write-Output "=== Step 2: Convert .class to .dex ==="
 New-Item -ItemType Directory -Path "$projectDir\out\dex" -Force | Out-Null
 & "$javaHome\bin\jar.exe" cf "$projectDir\out\classes.jar" -C "$projectDir\out\classes" .
-& "$buildTools\d8.bat" --lib "$platform\android.jar" --output "$projectDir\out\dex" "$projectDir\out\classes.jar"
+& "$buildTools\d8.bat" --lib "$platform\android.jar" --output "$projectDir\out\dex" "$projectDir\out\classes.jar" "$projectDir\lib\shizuku-api.jar" "$projectDir\lib\shizuku-aidl.jar" "$projectDir\lib\shizuku-provider.jar"
 if ($LASTEXITCODE -ne 0) { throw "d8 failed" }
 
 Write-Output "=== Step 3: Generate resources ==="

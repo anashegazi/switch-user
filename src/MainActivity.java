@@ -251,10 +251,12 @@ public class MainActivity extends Activity {
         btn.setEnabled(!loading);
         if (loading) {
             btn.setTag(btn.getText().toString());
-            btn.setText("\u25CC " + btn.getText().toString().replaceAll("[^\\p{L} ]", "").trim());
+            LoaderDrawable d = new LoaderDrawable(getResources().getDisplayMetrics().density);
+            d.setBounds(0, 0, dpToPx(48), dpToPx(48));
+            btn.setCompoundDrawables(d, null, null, null);
+            d.start();
         } else {
-            Object orig = btn.getTag();
-            if (orig != null) btn.setText((String) orig);
+            btn.setCompoundDrawables(null, null, null, null);
         }
     }
     private void restoreBtn(Button btn) {
@@ -691,5 +693,61 @@ public class MainActivity extends Activity {
 
             canvas.drawText(text, cx, textY, basePaint);
         }
+    }
+
+    // ── CSS-style Loader Drawable ──
+    private static class LoaderDrawable extends android.graphics.drawable.Drawable implements android.graphics.drawable.Animatable {
+        private final android.graphics.Paint ringPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+        private final android.graphics.Paint arcPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+        private final float density;
+        private float rotation;
+        private android.animation.ValueAnimator animator;
+
+        LoaderDrawable(float density) {
+            this.density = density;
+            ringPaint.setStyle(android.graphics.Paint.Style.STROKE);
+            ringPaint.setStrokeWidth(3 * density);
+            ringPaint.setColor(0xFFFFFFFF);
+
+            arcPaint.setStyle(android.graphics.Paint.Style.STROKE);
+            arcPaint.setStrokeWidth(3 * density);
+            arcPaint.setColor(0xFFFF3D00);
+            arcPaint.setStrokeCap(android.graphics.Paint.Cap.ROUND);
+        }
+
+        @Override
+        public void draw(android.graphics.Canvas canvas) {
+            android.graphics.Rect b = getBounds();
+            float cx = b.exactCenterX();
+            float cy = b.exactCenterY();
+            float r = Math.min(b.width(), b.height()) / 2f - 3 * density;
+
+            canvas.drawCircle(cx, cy, r, ringPaint);
+
+            canvas.save();
+            canvas.rotate(rotation, cx, cy);
+            float afterR = r + 4 * density;
+            android.graphics.RectF arcBounds = new android.graphics.RectF(cx - afterR, cy - afterR, cx + afterR, cy + afterR);
+            canvas.drawArc(arcBounds, 90, 180, false, arcPaint);
+            canvas.restore();
+        }
+
+        @Override
+        public void start() {
+            if (animator == null) {
+                animator = android.animation.ValueAnimator.ofFloat(0, 360);
+                animator.setDuration(1000);
+                animator.setRepeatCount(android.animation.ValueAnimator.INFINITE);
+                animator.setInterpolator(null);
+                animator.addUpdateListener(a -> { rotation = (float) a.getAnimatedValue(); invalidateSelf(); });
+            }
+            animator.start();
+        }
+
+        @Override public void stop() { if (animator != null) animator.cancel(); }
+        @Override public boolean isRunning() { return animator != null && animator.isRunning(); }
+        @Override public void setAlpha(int alpha) {}
+        @Override public void setColorFilter(android.graphics.ColorFilter cf) {}
+        @Override public int getOpacity() { return android.graphics.PixelFormat.TRANSLUCENT; }
     }
 }

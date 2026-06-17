@@ -7,14 +7,14 @@
     <uses-sdk android:minSdkVersion="28" android:targetSdkVersion="34" />
 
     <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
-    <uses-permission android:name="android.permission.WAKE_LOCK" />
-    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <uses-permission android:name="moe.shizuku.manager.permission.API_V23" />
 
     <queries>
-        <package android:name="moe.shizuku.manager" />
-        <package android:name="rikka.shizuku" />
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+        <package android:name="moe.shizuku.privileged.api" />
     </queries>
 
     <application
@@ -23,8 +23,6 @@
         android:roundIcon="@drawable/ic_launcher"
         android:allowBackup="false"
         android:supportsRtl="true">
-
-        <receiver android:name=".PollReceiver" android:exported="false" />
 
         <provider
             android:name="rikka.shizuku.ShizukuProvider"

@@ -5,8 +5,12 @@ import android.app.AlarmManager;
 import android.app.PendingIntent;
 import android.content.ComponentName;
 import android.content.Intent;
+import android.graphics.Color;
+import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.LayerDrawable;
 import android.os.Build;
+import android.view.MotionEvent;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -14,11 +18,9 @@ import android.service.quicksettings.TileService;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
-import android.widget.FrameLayout;
-import android.widget.LinearLayout;
-import android.widget.ProgressBar;
-import android.widget.ScrollView;
 import android.widget.TextView;
+import android.widget.LinearLayout;
+import android.widget.ScrollView;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -33,24 +35,27 @@ public class MainActivity extends Activity {
     private static final int PORT_PERSISTENT = 12347;
     private static final int TIMEOUT = 5000;
 
-    private TextView statusText;
     private Button guestBtn;
     private Button ownerBtn;
     private Button testBtn;
+    private View indicator;
+    private TextView statusText;
     private boolean embeddedRunning = false;
     private EmbeddedServer embeddedServer;
-    private View indicator;
-    private ProgressBar loading;
     private boolean polling = false;
     private Handler handler = new Handler(Looper.getMainLooper());
 
-    private static final int ACCENT = 0xFF1976D2;
-    private static final int DANGER = 0xFFD32F2F;
-    private static final int SUCCESS = 0xFF388E3C;
-    private static final int WARNING = 0xFFF57F17;
-    private static final int OFFLINE = 0xFFD32F2F;
-    private static final int CARD_BG = 0xFFFFFFFF;
-    private static final int PAGE_BG = 0xFFF5F5F5;
+    private static final int ACCENT = 0xFF6366F1;
+    private static final int DANGER = 0xFFEF4444;
+    private static final int PAGE_BG = 0xFFF8FAFC;
+    private static final int TEXT_PRIMARY = 0xFF0F172A;
+    private static final int TEXT_MUTED = 0xFF475569;
+    private static final int SUCCESS = 0xFF10B981;
+    private static final int WARNING = 0xFFF59E0B;
+    private static final int OFFLINE = 0xFFEF4444;
+    private static final int BORDER = 0xFF0F172A;
+    private static final int SEC_HOVER = 0xFFFBBF24;
+    private static final int SHADOW_OFF = 4;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -64,132 +69,112 @@ public class MainActivity extends Activity {
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
+        root.setGravity(Gravity.CENTER_HORIZONTAL);
         int pad16 = (int)(16 * dp);
-        root.setPadding(pad16, pad16, pad16, pad16);
+        int shadowOff = dpToPx(SHADOW_OFF);
+        int borderPx = dpToPx(2);
+        int screenW = getResources().getDisplayMetrics().widthPixels;
+        int btnWidth = Math.min((int)(screenW * 0.85f), dpToPx(320));
 
-        // â”€â”€ Status Card â”€â”€
-        LinearLayout statusCard = new LinearLayout(this);
-        statusCard.setOrientation(LinearLayout.HORIZONTAL);
-        statusCard.setGravity(Gravity.CENTER_VERTICAL);
-        int pad12 = (int)(12 * dp);
-        statusCard.setPadding(pad12, pad12, pad12, pad12);
-        statusCard.setElevation(2 * dp);
-        GradientDrawable cardBg = new GradientDrawable();
-        cardBg.setCornerRadius(12 * dp);
-        cardBg.setColor(CARD_BG);
-        statusCard.setBackground(cardBg);
-        LinearLayout.LayoutParams cardLp = new LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT);
-        cardLp.setMargins(0, 0, 0, pad16);
-        statusCard.setLayoutParams(cardLp);
+        // ── Header Banner ──
+        LinearLayout banner = new LinearLayout(this);
+        banner.setOrientation(LinearLayout.VERTICAL);
+        banner.setGravity(Gravity.CENTER);
+        int bannerH = (int)(56 * dp);
+        LinearLayout.LayoutParams bannerLp = new LinearLayout.LayoutParams(-1, bannerH);
+        bannerLp.setMargins(0, 0, 0, pad16);
+        banner.setLayoutParams(bannerLp);
+
+        GlitchTextView bannerText = new GlitchTextView(this, "Guest Switcher");
+        banner.addView(bannerText, new LinearLayout.LayoutParams(-1, -1));
+        banner.setBackground(createBannerBg());
+
+        // Bouncy entrance
+        banner.setScaleX(0.85f);
+        banner.setScaleY(0.85f);
+        banner.setAlpha(0f);
+        banner.postDelayed(() -> {
+            banner.animate()
+                .scaleX(1f).scaleY(1f).alpha(1f)
+                .setDuration(400)
+                .setInterpolator(new android.view.animation.BounceInterpolator())
+                .start();
+        }, 100);
+
+        // ── Status Chip ──
+        LinearLayout chip = new LinearLayout(this);
+        chip.setOrientation(LinearLayout.HORIZONTAL);
+        chip.setGravity(Gravity.CENTER_VERTICAL);
+        int chipPad = (int)(10 * dp);
+        chip.setPadding(chipPad, chipPad, chipPad, chipPad);
+        chip.setBackground(createHardShadowBg(dpToPx(999), 0xFFFFFFFF, shadowOff));
+        LinearLayout.LayoutParams chipLp = new LinearLayout.LayoutParams(-1, -2);
+        chipLp.setMargins(0, 0, 0, pad16);
+        chip.setLayoutParams(chipLp);
 
         indicator = new View(this);
         int dotSize = (int)(12 * dp);
         LinearLayout.LayoutParams dotLp = new LinearLayout.LayoutParams(dotSize, dotSize);
         dotLp.setMargins(0, 0, (int)(8 * dp), 0);
         indicator.setLayoutParams(dotLp);
-        setIndicatorColor(0xff888888);
-
-        loading = new ProgressBar(this);
-        int loadSize = (int)(18 * dp);
-        LinearLayout.LayoutParams loadLp = new LinearLayout.LayoutParams(loadSize, loadSize);
-        loadLp.setMargins(0, 0, (int)(8 * dp), 0);
-        loading.setLayoutParams(loadLp);
-        loading.setVisibility(View.GONE);
 
         statusText = new TextView(this);
         statusText.setText("Checking server...");
-        statusText.setTextSize(14);
-        statusText.setTextColor(0xFF333333);
-        statusText.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
+        statusText.setTextSize(13);
+        statusText.setTextColor(TEXT_PRIMARY);
+        statusText.setTypeface(null, android.graphics.Typeface.BOLD);
 
-        statusCard.addView(indicator);
-        statusCard.addView(loading);
-        statusCard.addView(statusText);
+        chip.addView(indicator);
+        chip.addView(statusText);
 
-        // â”€â”€ Section: Switch â”€â”€
-        TextView switchHeader = new TextView(this);
-        switchHeader.setText("SWITCH");
-        switchHeader.setTextSize(11);
-        switchHeader.setTextColor(0xFF999999);
-        int pad8 = (int)(8 * dp);
-        switchHeader.setPadding(0, 0, 0, pad8);
-
-        guestBtn = makePrimary("ðŸ  Switch to Guest");
+        guestBtn = makePrimary("Switch to Guest", btnWidth);
         guestBtn.setEnabled(false);
         guestBtn.setOnClickListener(v -> {
             setBtnLoading(guestBtn, true);
-            statusText.setText("Switching to Guest...");
-            setIndicatorColor(WARNING);
             execCommand("echo '===SWITCHING==='; nohup sh -c 'while true; do nc -l -p 12347 -4 sh; done' >/dev/null 2>&1 & sleep 1; am switch-user 10; echo 'SWITCH_EXIT='$?; nohup sh -c 'sleep 2 && am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS && sleep 1 && input keyevent 4 && cmd notification snooze --for 2147483647 \"10|com.android.systemui|70|null|10065\" && cmd notification snooze --for 2147483647 \"-1|android|62|null|1000\"' >/dev/null 2>&1 &", false, true, guestBtn);
         });
 
-        ownerBtn = makePrimary("ðŸ  Switch to Owner");
+        ownerBtn = makePrimary("Switch to Owner", btnWidth);
         ownerBtn.setEnabled(false);
         ownerBtn.setOnClickListener(v -> {
             setBtnLoading(ownerBtn, true);
-            statusText.setText("Switching to Owner...");
-            setIndicatorColor(WARNING);
             execCommand("echo '===SWITCHING==='; am switch-user 0; echo 'SWITCH_EXIT='$?", false, true, ownerBtn);
         });
 
-        // â”€â”€ Section: Tools â”€â”€
-        TextView toolsHeader = new TextView(this);
-        toolsHeader.setText("TOOLS");
-        toolsHeader.setTextSize(11);
-        toolsHeader.setTextColor(0xFF999999);
-        toolsHeader.setPadding(0, pad16, 0, pad8);
-
-        testBtn = makeSecondary("ðŸ”§ Test Server");
+        testBtn = makeSecondary("Test Server", btnWidth);
         testBtn.setEnabled(false);
         testBtn.setOnClickListener(v -> {
             setBtnLoading(testBtn, true);
-            statusText.setText("Testing...");
-            setIndicatorColor(WARNING);
             execCommand("echo OK", true, true, testBtn);
         });
 
-        Button ladbBtn = makeSecondary("ðŸ“¡ Open LADB");
+        Button ladbBtn = makeSecondary("Open LADB", btnWidth);
         ladbBtn.setOnClickListener(v -> openLadb());
 
-        Button retryBtn = makeSecondary("ðŸ”„ Refresh");
+        Button retryBtn = makeSecondary("Refresh", btnWidth);
         retryBtn.setOnClickListener(v -> checkServer());
 
-        // â”€â”€ Divider â”€â”€
-        View divider = new View(this);
-        LinearLayout.LayoutParams divLp = new LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, 1);
-        divLp.setMargins(0, pad16, 0, pad16);
-        divider.setLayoutParams(divLp);
-        divider.setBackgroundColor(0xFFE0E0E0);
-
-        // â”€â”€ Emergency â”€â”€
-        Button emergencyBtn = makeDanger("âš ï¸ Emergency");
+        Button emergencyBtn = makeDanger("Emergency", btnWidth);
         emergencyBtn.setOnClickListener(v -> emergencySwitch());
 
-        // â”€â”€ Footer â”€â”€
-        TextView footer = new TextView(this);
-        java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault());
-        String timeStr = sdf.format(new java.util.Date());
-        footer.setText("Last updated: " + timeStr);
-        footer.setTextSize(11);
-        footer.setTextColor(0xFFBBBBBB);
-        footer.setGravity(Gravity.CENTER_HORIZONTAL);
-        footer.setPadding(0, pad16, 0, 0);
+        root.addView(banner);
+        root.addView(chip);
 
-        // â”€â”€ Assemble â”€â”€
-        root.addView(statusCard);
-        root.addView(switchHeader);
+        root.addView(makeDivider());
         root.addView(guestBtn);
         root.addView(ownerBtn);
-        root.addView(toolsHeader);
+
+        root.addView(makeDivider());
         root.addView(testBtn);
         root.addView(ladbBtn);
         root.addView(retryBtn);
-        root.addView(divider);
+
+        View emergDiv = makeDivider();
+        LinearLayout.LayoutParams emergDivLp = (LinearLayout.LayoutParams) emergDiv.getLayoutParams();
+        emergDivLp.topMargin = dpToPx(12);
+        emergDivLp.bottomMargin = dpToPx(12);
+        root.addView(emergDiv);
         root.addView(emergencyBtn);
-        root.addView(footer);
 
         scroll.addView(root);
         setContentView(scroll);
@@ -199,69 +184,64 @@ public class MainActivity extends Activity {
         registerTile();
     }
 
-    private Button makePrimary(String text) {
+    private Button makePrimary(String text, int width) {
         final float dp = getResources().getDisplayMetrics().density;
         Button btn = new Button(this, null, android.R.attr.borderlessButtonStyle);
         btn.setText(text);
-        btn.setTextSize(14);
+        btn.setTextSize(15);
         btn.setTextColor(0xFFFFFFFF);
         btn.setAllCaps(false);
-        btn.setMinHeight(0);
-        btn.setMinimumHeight(0);
-        GradientDrawable bg = new GradientDrawable();
-        bg.setCornerRadius(10 * dp);
-        bg.setColor(ACCENT);
-        btn.setBackground(bg);
-        btn.setElevation(3 * dp);
+        btn.setMinHeight(52);
+        btn.setMinimumHeight(52);
+        int shadowOff = dpToPx(SHADOW_OFF);
+        btn.setBackground(createHardShadowBg(dpToPx(999), ACCENT, shadowOff));
+        setGeometricTouch(btn, ACCENT, false);
         int pv = (int)(14 * dp);
-        int ph = (int)(20 * dp);
+        int ph = (int)(28 * dp);
         btn.setPadding(ph, pv, ph, pv);
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
-        lp.setMargins(0, 0, 0, (int)(8 * dp));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(width, -2);
+        lp.setMargins(0, 0, 0, (int)(12 * dp));
         btn.setLayoutParams(lp);
         return btn;
     }
 
-    private Button makeSecondary(String text) {
+    private Button makeSecondary(String text, int width) {
         final float dp = getResources().getDisplayMetrics().density;
         Button btn = new Button(this, null, android.R.attr.borderlessButtonStyle);
         btn.setText(text);
-        btn.setTextSize(14);
-        btn.setTextColor(0xFF666666);
+        btn.setTextSize(15);
+        btn.setTextColor(TEXT_PRIMARY);
         btn.setAllCaps(false);
-        btn.setMinHeight(0);
-        btn.setMinimumHeight(0);
-        GradientDrawable bg = new GradientDrawable();
-        bg.setCornerRadius(10 * dp);
-        bg.setColor(CARD_BG);
-        bg.setStroke((int)(1 * dp + 0.5f), 0xFFD0D0D0);
-        btn.setBackground(bg);
+        btn.setMinHeight(52);
+        btn.setMinimumHeight(52);
+        int shadowOff = dpToPx(SHADOW_OFF);
+        btn.setBackground(createHardShadowBg(dpToPx(999), 0xFFFFFFFF, shadowOff));
+        setGeometricTouch(btn, 0xFFFFFFFF, true);
         int pv = (int)(12 * dp);
-        int ph = (int)(20 * dp);
+        int ph = (int)(28 * dp);
         btn.setPadding(ph, pv, ph, pv);
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
-        lp.setMargins(0, 0, 0, (int)(8 * dp));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(width, -2);
+        lp.setMargins(0, 0, 0, (int)(12 * dp));
         btn.setLayoutParams(lp);
         return btn;
     }
 
-    private Button makeDanger(String text) {
+    private Button makeDanger(String text, int width) {
         final float dp = getResources().getDisplayMetrics().density;
         Button btn = new Button(this, null, android.R.attr.borderlessButtonStyle);
         btn.setText(text);
-        btn.setTextSize(14);
+        btn.setTextSize(15);
         btn.setTextColor(0xFFFFFFFF);
-        btn.setAllCaps(false);
-        btn.setMinHeight(0);
-        btn.setMinimumHeight(0);
-        GradientDrawable bg = new GradientDrawable();
-        bg.setCornerRadius(10 * dp);
-        bg.setColor(DANGER);
-        btn.setBackground(bg);
+        btn.setAllCaps(true);
+        btn.setMinHeight(52);
+        btn.setMinimumHeight(52);
+        int shadowOff = dpToPx(SHADOW_OFF);
+        btn.setBackground(createHardShadowBg(dpToPx(999), DANGER, shadowOff));
+        setGeometricTouch(btn, DANGER, false);
         int pv = (int)(14 * dp);
-        int ph = (int)(20 * dp);
+        int ph = (int)(28 * dp);
         btn.setPadding(ph, pv, ph, pv);
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(width, -2);
         lp.setMargins(0, 0, 0, 0);
         btn.setLayoutParams(lp);
         return btn;
@@ -271,7 +251,7 @@ public class MainActivity extends Activity {
         btn.setEnabled(!loading);
         if (loading) {
             btn.setTag(btn.getText().toString());
-            btn.setText("◌ " + btn.getText().toString().replaceAll("[^\\p{L} ]", "").trim());
+            btn.setText("\u25CC " + btn.getText().toString().replaceAll("[^\\p{L} ]", "").trim());
         } else {
             Object orig = btn.getTag();
             if (orig != null) btn.setText((String) orig);
@@ -281,23 +261,107 @@ public class MainActivity extends Activity {
         if (btn != null) setBtnLoading(btn, false);
     }
 
+    private View makeDivider() {
+        float dp = getResources().getDisplayMetrics().density;
+        View div = new View(this);
+        div.setBackgroundColor(BORDER);
+        int screenW = getResources().getDisplayMetrics().widthPixels;
+        int divW = (int)(screenW * 0.75f);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(divW, dpToPx(2));
+        lp.setMargins(0, dpToPx(20), 0, dpToPx(20));
+        lp.gravity = Gravity.CENTER_HORIZONTAL;
+        div.setLayoutParams(lp);
+        return div;
+    }
+
+    private int dpToPx(int dp) {
+        return (int)(dp * getResources().getDisplayMetrics().density + 0.5f);
+    }
+
+    private Drawable createHardShadowBg(int radius, int bgColor, int shadowOff) {
+        GradientDrawable shadow = new GradientDrawable();
+        shadow.setShape(GradientDrawable.RECTANGLE);
+        shadow.setCornerRadius(radius);
+        shadow.setColor(BORDER);
+
+        GradientDrawable main = new GradientDrawable();
+        main.setShape(GradientDrawable.RECTANGLE);
+        main.setCornerRadius(radius);
+        main.setColor(bgColor);
+        main.setStroke(dpToPx(2), BORDER);
+
+        LayerDrawable ld = new LayerDrawable(new Drawable[]{shadow, main});
+        ld.setLayerInset(1, 0, 0, shadowOff, shadowOff);
+        return ld;
+    }
+
+    private Drawable createPlainBg(int radius, int bgColor) {
+        GradientDrawable gd = new GradientDrawable();
+        gd.setShape(GradientDrawable.RECTANGLE);
+        gd.setCornerRadius(radius);
+        gd.setColor(bgColor);
+        gd.setStroke(dpToPx(2), BORDER);
+        return gd;
+    }
+
+    private Drawable createBannerBg() {
+        int sh = dpToPx(SHADOW_OFF);
+        int bp = dpToPx(2);
+        GradientDrawable shadow = new GradientDrawable();
+        shadow.setShape(GradientDrawable.RECTANGLE);
+        shadow.setColor(BORDER);
+
+        GradientDrawable main = new GradientDrawable();
+        main.setShape(GradientDrawable.RECTANGLE);
+        main.setColor(ACCENT);
+        main.setStroke(bp, BORDER);
+
+        LayerDrawable ld = new LayerDrawable(new Drawable[]{shadow, main});
+        ld.setLayerInset(1, 0, 0, 0, sh);
+        return ld;
+    }
+
+    private void setGeometricTouch(Button btn, int bgColor, boolean isSecondary) {
+        int shadowOff = dpToPx(SHADOW_OFF);
+        int radius = dpToPx(999);
+        btn.setOnTouchListener((v, event) -> {
+            if (!v.isEnabled()) return false;
+            if (event.getAction() == MotionEvent.ACTION_DOWN) {
+                int pressBg = isSecondary ? SEC_HOVER : bgColor;
+                v.setBackground(createPlainBg(radius, pressBg));
+                v.setTranslationX(shadowOff);
+                v.setTranslationY(shadowOff);
+            } else if (event.getAction() == MotionEvent.ACTION_UP || event.getAction() == MotionEvent.ACTION_CANCEL) {
+                v.setBackground(createHardShadowBg(radius, bgColor, shadowOff));
+                v.setTranslationX(0);
+                v.setTranslationY(0);
+            }
+            return false;
+        });
+    }
+
+    private void setChip(int color, String text) {
+        GradientDrawable circle = new GradientDrawable();
+        circle.setShape(GradientDrawable.OVAL);
+        float d = getResources().getDisplayMetrics().density;
+        circle.setSize((int)(10 * d), (int)(10 * d));
+        circle.setColor(color);
+        indicator.setBackground(circle);
+        statusText.setText(text);
+    }
+
     private void emergencySwitch() {
         polling = true;
-        loading.setVisibility(View.VISIBLE);
-        statusText.setText("Switching to Guest mode...");
-        setIndicatorColor(WARNING);
+        setChip(WARNING, "Waiting Server\u2026");
         new Thread(() -> {
             boolean online = checkServerSync(PORT_SHELL, PORT_PERSISTENT);
             runOnUiThread(() -> {
                 if (online) {
                     polling = false;
-                    loading.setVisibility(View.GONE);
-                    setIndicatorColor(SUCCESS);
+                    setChip(SUCCESS, "Connected");
                     doSwitch();
                 } else {
                     openLadb();
-                    statusText.setText("Waiting Server");
-                    setIndicatorColor(WARNING);
                     scheduleAlarmPoll();
                     handler.postDelayed(() -> {
                         try {
@@ -313,8 +377,7 @@ public class MainActivity extends Activity {
 
     private void startPolling() {
         if (!polling) return;
-        statusText.setText("Waiting Server");
-        setIndicatorColor(WARNING);
+        setChip(WARNING, "Waiting Server\u2026");
         handler.removeCallbacks(pollRunnable);
         handler.post(pollRunnable);
     }
@@ -328,12 +391,8 @@ public class MainActivity extends Activity {
                 runOnUiThread(() -> {
                     if (online) {
                         polling = false;
-                        loading.setVisibility(View.GONE);
-                        setIndicatorColor(SUCCESS);
-                        statusText.setText("Switching to Guest mode...");
                         handler.removeCallbacks(pollRunnable);
                         handler.postDelayed(() -> {
-                            statusText.setText("Switching to Guest mode...");
                             doSwitch();
                         }, 1500);
                     } else {
@@ -346,7 +405,6 @@ public class MainActivity extends Activity {
     };
 
     private void doSwitch() {
-        statusText.setText("Switching to Guest...");
         execCommand("echo '===SWITCHING==='; nohup sh -c 'while true; do nc -l -p 12347 -4 sh; done' >/dev/null 2>&1 & sleep 1; am switch-user 10; echo 'SWITCH_EXIT='$?; nohup sh -c 'sleep 2 && am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS && sleep 1 && input keyevent 4 && cmd notification snooze --for 2147483647 \"10|com.android.systemui|70|null|10065\" && cmd notification snooze --for 2147483647 \"-1|android|62|null|1000\"' >/dev/null 2>&1 &", false, true, null);
     }
 
@@ -378,18 +436,12 @@ public class MainActivity extends Activity {
         try {
             Intent intent = getPackageManager().getLaunchIntentForPackage("com.draco.ladb");
             if (intent == null) {
-                statusText.setText("LADB is not installed");
-                loading.setVisibility(View.GONE);
-                setIndicatorColor(OFFLINE);
                 polling = false;
                 return;
             }
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
             startActivity(intent);
         } catch (Exception e) {
-            statusText.setText("Could not open LADB");
-            loading.setVisibility(View.GONE);
-            setIndicatorColor(OFFLINE);
             polling = false;
         }
     }
@@ -415,9 +467,7 @@ public class MainActivity extends Activity {
         if (intent != null && intent.getBooleanExtra("emergency_poll", false)) {
             intent.removeExtra("emergency_poll");
             polling = true;
-            statusText.setText("Waiting Server");
-            setIndicatorColor(WARNING);
-            loading.setVisibility(View.VISIBLE);
+            setChip(WARNING, "Waiting Server\u2026");
             startPolling();
         } else if (!polling) {
             checkServer();
@@ -429,15 +479,6 @@ public class MainActivity extends Activity {
         Intent check = new Intent(this, PollReceiver.class);
         PendingIntent pi = PendingIntent.getBroadcast(this, 0, check, PendingIntent.FLAG_MUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
         am.setAlarmClock(new AlarmManager.AlarmClockInfo(System.currentTimeMillis() + 2000, pi), pi);
-    }
-
-    private void setIndicatorColor(int color) {
-        GradientDrawable circle = new GradientDrawable();
-        circle.setShape(GradientDrawable.OVAL);
-        float dp = getResources().getDisplayMetrics().density;
-        circle.setSize((int)(12 * dp), (int)(12 * dp));
-        circle.setColor(color);
-        indicator.setBackground(circle);
     }
 
     private void registerTile() {
@@ -458,18 +499,16 @@ public class MainActivity extends Activity {
             }
             final int fLevel = level;
             runOnUiThread(() -> {
-                int[] colors = {OFFLINE, WARNING, SUCCESS};
-                String[] texts = {"Disconnected", "Limited", "Connected"};
-                setIndicatorColor(colors[fLevel]);
-                statusText.setText(texts[fLevel]);
                 boolean enabled = fLevel == 2;
                 guestBtn.setEnabled(enabled);
                 ownerBtn.setEnabled(enabled);
                 testBtn.setEnabled(enabled);
-                loading.setVisibility(View.GONE);
                 restoreBtn(guestBtn);
                 restoreBtn(ownerBtn);
                 restoreBtn(testBtn);
+                if (fLevel == 2) setChip(SUCCESS, "Connected");
+                else if (fLevel == 1) setChip(WARNING, "Limited");
+                else setChip(OFFLINE, "Disconnected");
             });
         }).start();
     }
@@ -480,7 +519,6 @@ public class MainActivity extends Activity {
 
     private void execCommand(final String cmd, final boolean simple, final boolean shellOnly, final Button triggerBtn) {
         final int[] tryPorts = shellOnly ? new int[]{PORT_SHELL, PORT_PERSISTENT} : new int[]{PORT_SHELL, PORT_PERSISTENT, PORT_EMBEDDED};
-        loading.setVisibility(View.VISIBLE);
         new Thread(() -> {
             String result = null;
             for (int port : tryPorts) {
@@ -518,15 +556,8 @@ public class MainActivity extends Activity {
             }
             final String finalResult = result;
             runOnUiThread(() -> {
-                loading.setVisibility(View.GONE);
                 restoreBtn(triggerBtn);
-                if (finalResult != null) {
-                    statusText.setText(finalResult);
-                    if (!"OK".equals(finalResult))
-                        setIndicatorColor(SUCCESS);
-                } else {
-                    statusText.setText("Connection failed");
-                    setIndicatorColor(OFFLINE);
+                if (finalResult == null) {
                     guestBtn.setEnabled(false);
                     ownerBtn.setEnabled(false);
                 }
@@ -574,7 +605,6 @@ public class MainActivity extends Activity {
                         out.flush();
                         client.close();
                     } catch (Exception e) {
-                        // connection error, continue
                     }
                 }
             } catch (Exception e) {
@@ -587,5 +617,79 @@ public class MainActivity extends Activity {
             try { serverSocket.close(); } catch (Exception e) {}
         }
     }
-}
 
+    // ── Glitch Text View ──
+    private class GlitchTextView extends android.view.View {
+        private final String text;
+        private final android.graphics.Paint basePaint;
+        private final android.graphics.Paint magentaPaint;
+        private final android.graphics.Paint cyanPaint;
+        private boolean glitching;
+        private float offsetX, offsetY;
+
+        GlitchTextView(android.content.Context context, String txt) {
+            super(context);
+            this.text = txt.toUpperCase();
+            float density = context.getResources().getDisplayMetrics().density;
+            float textSize = 20 * density;
+
+            basePaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+            basePaint.setColor(0xFFFFFFFF);
+            basePaint.setTextSize(textSize);
+            basePaint.setFakeBoldText(true);
+            basePaint.setTextAlign(android.graphics.Paint.Align.CENTER);
+
+            magentaPaint = new android.graphics.Paint(basePaint);
+            magentaPaint.setColor(0xFFFF00FF);
+            magentaPaint.setAlpha(204);
+
+            cyanPaint = new android.graphics.Paint(basePaint);
+            cyanPaint.setColor(0xFF00D4FF);
+            cyanPaint.setAlpha(204);
+
+            startGlitchCycle();
+        }
+
+        private void startGlitchCycle() {
+            final int[] phases = {
+                -3, 1,   // 0
+                 3, -1,  // 1
+                -2, 3,   // 2
+                 2, -2,  // 3
+                -4, -2,  // 4
+                 1, -1,  // 5
+                -3, 1,   // 6
+                 3, -1,  // 7
+                 0, 0    // 8 — brief pause
+            };
+            glitching = true;
+            android.animation.ValueAnimator anim = android.animation.ValueAnimator.ofInt(0, 2000);
+            anim.setDuration(2000);
+            anim.setRepeatCount(android.animation.ValueAnimator.INFINITE);
+            anim.addUpdateListener(a -> {
+                int idx = ((int) a.getAnimatedValue() / 60) % 9;
+                offsetX = phases[idx * 2];
+                offsetY = phases[idx * 2 + 1];
+                invalidate();
+            });
+            anim.start();
+        }
+
+        @Override
+        protected void onDraw(android.graphics.Canvas canvas) {
+            super.onDraw(canvas);
+            float cx = getWidth() / 2f;
+            float cy = getHeight() / 2f;
+            android.graphics.Paint.FontMetrics fm = basePaint.getFontMetrics();
+            float textY = cy - (fm.ascent + fm.descent) / 2f;
+
+            if (glitching) {
+                float dp = getResources().getDisplayMetrics().density;
+                canvas.drawText(text, cx + offsetX * dp * 0.6f, textY + offsetY * dp * 0.6f, cyanPaint);
+                canvas.drawText(text, cx - offsetX * dp * 0.6f, textY - offsetY * dp * 0.6f, magentaPaint);
+            }
+
+            canvas.drawText(text, cx, textY, basePaint);
+        }
+    }
+}

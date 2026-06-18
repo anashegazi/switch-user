@@ -27,7 +27,7 @@ public class ShakeDetectorService extends Service implements SensorEventListener
 
     // Shake detection parameters
     // User must shake continuously for this long to trigger
-    private static final long SHAKE_HOLD_MS = 2000;
+    private static final long SHAKE_HOLD_MS = 1500;
     // How long between movements before we consider the shake "broken"
     private static final long SHAKE_GAP_MS = 400;
     private static final float SHAKE_THRESHOLD = 7.0f;

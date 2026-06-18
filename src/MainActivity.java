@@ -25,6 +25,8 @@ import java.net.ServerSocket;
 import java.net.Socket;
 
 import android.content.pm.PackageManager;
+import android.content.SharedPreferences;
+import android.widget.ToggleButton;
 
 public class MainActivity extends Activity {
 
@@ -39,6 +41,9 @@ public class MainActivity extends Activity {
     private TextView statusText;
     private boolean embeddedRunning = false;
     private EmbeddedServer embeddedServer;
+    private ToggleButton shakeToggle;
+    private SharedPreferences prefs;
+    private boolean shakeServiceRunning = false;
 
     private static final int ACCENT = 0xFF6366F1;
     private static final int PAGE_BG = 0xFFF8FAFC;
@@ -135,6 +140,44 @@ public class MainActivity extends Activity {
             execCommand("echo '===SWITCHING==='; am switch-user 0; echo 'SWITCH_EXIT='$?", false, true, ownerBtn);
         });
 
+        // ── Shake Toggle ──
+        prefs = getSharedPreferences("guest_switcher", MODE_PRIVATE);
+        boolean shakeWasEnabled = prefs.getBoolean("shake_enabled", false);
+
+        shakeToggle = new ToggleButton(this);
+        shakeToggle.setTextOff("\uD83E\uDEA8  Shake to Guest");
+        shakeToggle.setTextOn("\uD83E\uDEA8  Shake ON");
+        shakeToggle.setText(shakeWasEnabled ? "\uD83E\uDEA8  Shake ON" : "\uD83E\uDEA8  Shake to Guest");
+        shakeToggle.setChecked(shakeWasEnabled);
+        shakeToggle.setTextSize(15);
+        shakeToggle.setTextColor(TEXT_PRIMARY);
+        shakeToggle.setAllCaps(false);
+        shakeToggle.setMinHeight(52);
+        shakeToggle.setMinimumHeight(52);
+        int shakeShadowOff = dpToPx(SHADOW_OFF);
+        shakeToggle.setBackground(createHardShadowBg(dpToPx(999), 0xFFFFFFFF, shakeShadowOff));
+        int shakePv = (int)(14 * dp);
+        int shakePh = (int)(28 * dp);
+        shakeToggle.setPadding(shakePh, shakePv, shakePh, shakePv);
+        LinearLayout.LayoutParams shakeLp = new LinearLayout.LayoutParams(btnWidth, -2);
+        shakeLp.setMargins(0, (int)(6 * dp), 0, (int)(12 * dp));
+        shakeToggle.setLayoutParams(shakeLp);
+        setGeometricTouchForToggle(shakeToggle, 0xFFFFFFFF, true);
+
+        shakeToggle.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            prefs.edit().putBoolean("shake_enabled", isChecked).apply();
+            if (isChecked) {
+                startShakeService();
+            } else {
+                stopShakeService();
+            }
+        });
+
+        // Auto-start service if was enabled
+        if (shakeWasEnabled) {
+            shakeServiceRunning = true;
+        }
+
         Button shizukuBtn = makeSecondary("Open Shizuku", btnWidth);
         shizukuBtn.setOnClickListener(v -> openShizuku());
 
@@ -147,6 +190,7 @@ public class MainActivity extends Activity {
         root.addView(makeDivider());
         root.addView(guestBtn);
         root.addView(ownerBtn);
+        root.addView(shakeToggle);
 
         root.addView(makeDivider());
         root.addView(shizukuBtn);
@@ -302,6 +346,40 @@ public class MainActivity extends Activity {
             }
             return false;
         });
+    }
+
+    private void setGeometricTouchForToggle(ToggleButton btn, int bgColor, boolean isSecondary) {
+        int shadowOff = dpToPx(SHADOW_OFF);
+        int radius = dpToPx(999);
+        btn.setOnTouchListener((v, event) -> {
+            if (event.getAction() == MotionEvent.ACTION_DOWN) {
+                int pressBg = isSecondary ? SEC_HOVER : bgColor;
+                v.setBackground(createPlainBg(radius, pressBg));
+                v.setTranslationX(shadowOff);
+                v.setTranslationY(shadowOff);
+            } else if (event.getAction() == MotionEvent.ACTION_UP || event.getAction() == MotionEvent.ACTION_CANCEL) {
+                v.setBackground(createHardShadowBg(radius, bgColor, shadowOff));
+                v.setTranslationX(0);
+                v.setTranslationY(0);
+            }
+            return true;
+        });
+    }
+
+    private void startShakeService() {
+        Intent intent = new Intent(this, ShakeDetectorService.class);
+        if (Build.VERSION.SDK_INT >= 26) {
+            startForegroundService(intent);
+        } else {
+            startService(intent);
+        }
+        shakeServiceRunning = true;
+    }
+
+    private void stopShakeService() {
+        Intent intent = new Intent(this, ShakeDetectorService.class);
+        stopService(intent);
+        shakeServiceRunning = false;
     }
 
     private void setChip(int color, String text) {

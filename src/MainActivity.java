@@ -125,15 +125,13 @@ public class MainActivity extends Activity {
         statusText.setTextColor(TEXT_PRIMARY);
         statusText.setTypeface(null, android.graphics.Typeface.BOLD);
 
-        chip.addView(indicator);
-        chip.addView(statusText);
-
-        View sep = new View(this);
-        sep.setBackgroundColor(BORDER);
-        LinearLayout.LayoutParams sepLp = new LinearLayout.LayoutParams(dpToPx(1), (int)(14 * dp));
-        sepLp.setMargins((int)(8 * dp), 0, (int)(8 * dp), 0);
-        sep.setLayoutParams(sepLp);
-        chip.addView(sep);
+        LinearLayout leftGroup = new LinearLayout(this);
+        leftGroup.setOrientation(LinearLayout.HORIZONTAL);
+        leftGroup.setGravity(Gravity.CENTER_VERTICAL);
+        leftGroup.setLayoutParams(new LinearLayout.LayoutParams(0, -2, 1f));
+        leftGroup.addView(indicator);
+        leftGroup.addView(statusText);
+        chip.addView(leftGroup);
 
         shakeDot = new View(this);
         LinearLayout.LayoutParams sDotLp = new LinearLayout.LayoutParams(dotSize, dotSize);
@@ -200,10 +198,7 @@ public class MainActivity extends Activity {
             }
         });
 
-        // Auto-start shake service on app launch (always active)
-        if (shakeWasEnabled) {
-            shakeServiceRunning = true;
-        }
+
 
         Button shizukuBtn = makeSecondary("Open Shizuku", btnWidth);
         shizukuBtn.setOnClickListener(v -> openShizuku());
@@ -234,14 +229,14 @@ public class MainActivity extends Activity {
         ShizukuHelper.addPermissionListener((requestCode, grantResult) -> {
             if (grantResult == PackageManager.PERMISSION_GRANTED) {
                 checkServer();
-                if (!shakeServiceRunning) {
+                if (!shakeServiceRunning && prefs.getBoolean("shake_enabled", false)) {
                     startShakeService();
                 }
             }
         });
 
-        // Always start shake service on app launch
-        if (!shakeServiceRunning) {
+        // Always start shake service on app launch if it was enabled
+        if (shakeWasEnabled) {
             startShakeService();
         }
     }

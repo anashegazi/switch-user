@@ -36,6 +36,18 @@ public class ShizukuHelper {
         return binderReady && permGranted;
     }
 
+    public static boolean isReadyDirect() {
+        try {
+            boolean binder = Shizuku.pingBinder();
+            boolean perm = Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED;
+            binderReady = binder;
+            permGranted = perm;
+            return binder && perm;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     public static boolean isRunning() {
         if (!binderReady) {
             try { binderReady = Shizuku.pingBinder(); } catch (Exception e) { }

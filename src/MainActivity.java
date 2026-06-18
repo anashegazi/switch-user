@@ -39,6 +39,8 @@ public class MainActivity extends Activity {
     private Button ownerBtn;
     private View indicator;
     private TextView statusText;
+    private View shakeDot;
+    private TextView shakeLabel;
     private boolean embeddedRunning = false;
     private EmbeddedServer embeddedServer;
     private ToggleButton shakeToggle;
@@ -125,6 +127,27 @@ public class MainActivity extends Activity {
 
         chip.addView(indicator);
         chip.addView(statusText);
+
+        View sep = new View(this);
+        sep.setBackgroundColor(BORDER);
+        LinearLayout.LayoutParams sepLp = new LinearLayout.LayoutParams(dpToPx(1), (int)(14 * dp));
+        sepLp.setMargins((int)(8 * dp), 0, (int)(8 * dp), 0);
+        sep.setLayoutParams(sepLp);
+        chip.addView(sep);
+
+        shakeDot = new View(this);
+        LinearLayout.LayoutParams sDotLp = new LinearLayout.LayoutParams(dotSize, dotSize);
+        sDotLp.setMargins(0, 0, (int)(6 * dp), 0);
+        shakeDot.setLayoutParams(sDotLp);
+
+        shakeLabel = new TextView(this);
+        shakeLabel.setTextSize(13);
+        shakeLabel.setTextColor(TEXT_PRIMARY);
+        shakeLabel.setTypeface(null, android.graphics.Typeface.BOLD);
+
+        chip.addView(shakeDot);
+        chip.addView(shakeLabel);
+        updateShakeStatus();
 
         guestBtn = makePrimary("Switch to Guest", btnWidth);
         guestBtn.setEnabled(false);
@@ -386,12 +409,14 @@ public class MainActivity extends Activity {
             startService(intent);
         }
         shakeServiceRunning = true;
+        updateShakeStatus();
     }
 
     private void stopShakeService() {
         Intent intent = new Intent(this, ShakeDetectorService.class);
         stopService(intent);
         shakeServiceRunning = false;
+        updateShakeStatus();
     }
 
     private void setChip(int color, String text) {
@@ -402,6 +427,21 @@ public class MainActivity extends Activity {
         circle.setColor(color);
         indicator.setBackground(circle);
         statusText.setText(text);
+    }
+
+    private void updateShakeStatus() {
+        GradientDrawable circle = new GradientDrawable();
+        circle.setShape(GradientDrawable.OVAL);
+        float d = getResources().getDisplayMetrics().density;
+        circle.setSize((int)(10 * d), (int)(10 * d));
+        if (shakeServiceRunning) {
+            circle.setColor(SUCCESS);
+            shakeLabel.setText("Shake ON");
+        } else {
+            circle.setColor(OFFLINE);
+            shakeLabel.setText("Shake OFF");
+        }
+        shakeDot.setBackground(circle);
     }
 
     private void doSwitch() {
@@ -503,6 +543,7 @@ public class MainActivity extends Activity {
             setChip(WARNING, "Grant Shizuku permission\u2026");
             ShizukuHelper.requestPermission(1001);
         }
+        updateShakeStatus();
         checkServer();
     }
 
@@ -515,7 +556,7 @@ public class MainActivity extends Activity {
     private void checkServer() {
         new Thread(() -> {
             int level;
-            if (ShizukuHelper.isReady()) {
+            if (ShizukuHelper.isReadyDirect()) {
                 level = 3;
             } else if (checkServerSync(PORT_SHELL, PORT_PERSISTENT)) {
                 level = 2;
@@ -535,6 +576,7 @@ public class MainActivity extends Activity {
                 else if (fLevel == 2) setChip(SUCCESS, "Connected");
                 else if (fLevel == 1) setChip(WARNING, "Limited");
                 else setChip(OFFLINE, "Disconnected");
+                updateShakeStatus();
             });
         }).start();
     }

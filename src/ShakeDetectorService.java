@@ -159,7 +159,7 @@ public class ShakeDetectorService extends Service implements SensorEventListener
     private void execCommand(final String cmd) {
         new Thread(() -> {
             String result = null;
-            if (ShizukuHelper.isReady()) {
+            if (ShizukuHelper.isReadyDirect()) {
                 String out = ShizukuHelper.execForOutput(cmd);
                 if (out != null) result = out.isEmpty() ? "OK" : out;
             }

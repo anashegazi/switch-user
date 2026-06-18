@@ -13,6 +13,7 @@ import android.hardware.SensorManager;
 import android.os.Build;
 import android.os.IBinder;
 import android.os.PowerManager;
+import android.util.Log;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -25,9 +26,11 @@ public class ShakeDetectorService extends Service implements SensorEventListener
     private static final int NOTIF_ID = 1001;
 
     // Shake detection parameters
-    private static final float SHAKE_THRESHOLD = 12.0f;
-    private static final int SHAKE_COUNT_THRESHOLD = 3;
-    private static final long SHAKE_WINDOW_MS = 1000;
+    // User must shake continuously for this long to trigger
+    private static final long SHAKE_HOLD_MS = 1000;
+    // How long between movements before we consider the shake "broken"
+    private static final long SHAKE_GAP_MS = 400;
+    private static final float SHAKE_THRESHOLD = 11.0f;
     private static final long COOLDOWN_MS = 3000;
 
     private static final int PORT_SHELL = 12345;
@@ -37,20 +40,24 @@ public class ShakeDetectorService extends Service implements SensorEventListener
     private SensorManager sensorManager;
     private PowerManager.WakeLock wakeLock;
 
-    private long lastShakeTime = 0;
-    private int shakeCount = 0;
+    private long shakeStart = 0;   // when continuous shaking began
+    private long lastMove = 0;     // time of last detected movement
     private boolean cooldown = false;
 
     @Override
     public void onCreate() {
         super.onCreate();
+        Log.d("ShakeDetector", "Service onCreate - starting foreground service");
         createNotificationChannel();
         startForeground(NOTIF_ID, buildNotification("🫨 Shake to Guest is active"));
 
         sensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
         Sensor accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
         if (accelerometer != null) {
-            sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_UI);
+            sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_GAME);
+            Log.d("ShakeDetector", "Accelerometer listener registered");
+        } else {
+            Log.e("ShakeDetector", "No accelerometer available on device!");
         }
 
         PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
@@ -76,28 +83,41 @@ public class ShakeDetectorService extends Service implements SensorEventListener
 
         double acceleration = Math.sqrt(x * x + y * y + z * z) - SensorManager.GRAVITY_EARTH;
 
+        long now = System.currentTimeMillis();
+
         if (acceleration > SHAKE_THRESHOLD) {
-            long now = System.currentTimeMillis();
-
-            if (cooldown) return;
-
-            if (now - lastShakeTime > SHAKE_WINDOW_MS) {
-                shakeCount = 0;
+            // A movement was detected
+            if (now - lastMove > SHAKE_GAP_MS) {
+                // Gap too big -> start a fresh continuous shake
+                shakeStart = now;
+                Log.d("ShakeDetector", "Shake started");
             }
+            lastMove = now;
 
-            lastShakeTime = now;
-            shakeCount++;
+            long held = now - shakeStart;
+            if (held >= SHAKE_HOLD_MS) {
+                if (!cooldown) {
+                    Log.d("ShakeDetector", "Shake held for " + held + "ms -> TRIGGERING SWITCH");
+                    cooldown = true;
+                    triggerSwitch();
 
-            if (shakeCount >= SHAKE_COUNT_THRESHOLD) {
-                shakeCount = 0;
-                cooldown = true;
-                triggerSwitch();
-
-                // Reset cooldown after delay
-                new Thread(() -> {
-                    try { Thread.sleep(COOLDOWN_MS); } catch (InterruptedException e) {}
-                    cooldown = false;
-                }).start();
+                    // Reset cooldown after delay
+                    new Thread(() -> {
+                        try { Thread.sleep(COOLDOWN_MS); } catch (InterruptedException e) {}
+                        cooldown = false;
+                    }).start();
+                }
+                // Reset after trigger so a new hold can begin later
+                shakeStart = now;
+                lastMove = now;
+            }
+        } else {
+            // No movement beyond threshold - if the gap has grown too long, reset
+            if (lastMove != 0 && (now - lastMove > SHAKE_GAP_MS)) {
+                if (shakeStart != 0) {
+                    Log.d("ShakeDetector", "Shake broken before reaching hold time");
+                }
+                shakeStart = 0;
             }
         }
     }

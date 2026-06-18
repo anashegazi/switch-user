@@ -142,6 +142,10 @@ public class MainActivity extends Activity {
 
         // ── Shake Toggle ──
         prefs = getSharedPreferences("guest_switcher", MODE_PRIVATE);
+        // On very first launch, enable shake automatically so it survives reboots
+        if (!prefs.contains("shake_enabled")) {
+            prefs.edit().putBoolean("shake_enabled", true).apply();
+        }
         boolean shakeWasEnabled = prefs.getBoolean("shake_enabled", false);
 
         shakeToggle = new ToggleButton(this);
@@ -173,7 +177,7 @@ public class MainActivity extends Activity {
             }
         });
 
-        // Auto-start service if was enabled
+        // Auto-start shake service on app launch (always active)
         if (shakeWasEnabled) {
             shakeServiceRunning = true;
         }
@@ -207,8 +211,16 @@ public class MainActivity extends Activity {
         ShizukuHelper.addPermissionListener((requestCode, grantResult) -> {
             if (grantResult == PackageManager.PERMISSION_GRANTED) {
                 checkServer();
+                if (!shakeServiceRunning) {
+                    startShakeService();
+                }
             }
         });
+
+        // Always start shake service on app launch
+        if (!shakeServiceRunning) {
+            startShakeService();
+        }
     }
 
     private Button makePrimary(String text, int width) {

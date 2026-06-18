@@ -3,6 +3,7 @@ package com.guest.switcher;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
@@ -24,6 +25,7 @@ public class ShakeDetectorService extends Service implements SensorEventListener
 
     private static final String CHANNEL_ID = "shake_channel";
     private static final int NOTIF_ID = 1001;
+    private static final String ACTION_SWITCH_GUEST = "com.guest.switcher.action.SWITCH_GUEST";
 
     // Shake detection parameters
     // User must shake continuously for this long to trigger
@@ -67,6 +69,9 @@ public class ShakeDetectorService extends Service implements SensorEventListener
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        if (intent != null && ACTION_SWITCH_GUEST.equals(intent.getAction())) {
+            triggerSwitch();
+        }
         return START_STICKY;
     }
 
@@ -216,11 +221,17 @@ public class ShakeDetectorService extends Service implements SensorEventListener
     }
 
     private Notification buildNotification(String text) {
+        Intent switchIntent = new Intent(this, ShakeDetectorService.class);
+        switchIntent.setAction(ACTION_SWITCH_GUEST);
+        PendingIntent pendingSwitch = PendingIntent.getService(this, 0, switchIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+
         Notification.Builder builder = new Notification.Builder(this, CHANNEL_ID)
             .setContentTitle("Guest Switcher")
             .setContentText(text)
             .setSmallIcon(android.R.drawable.ic_menu_compass)
-            .setOngoing(true);
+            .setOngoing(true)
+            .addAction(android.R.drawable.ic_input_add, "Switch to Guest", pendingSwitch);
 
         if (Build.VERSION.SDK_INT >= 33) {
             builder.setForegroundServiceBehavior(Notification.FOREGROUND_SERVICE_IMMEDIATE);

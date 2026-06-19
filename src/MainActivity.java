@@ -25,7 +25,6 @@ import java.net.ServerSocket;
 import java.net.Socket;
 
 import android.content.pm.PackageManager;
-import android.content.SharedPreferences;
 
 public class MainActivity extends Activity {
 
@@ -38,12 +37,8 @@ public class MainActivity extends Activity {
     private Button ownerBtn;
     private View indicator;
     private TextView statusText;
-    private View shakeDot;
-    private TextView shakeLabel;
     private boolean embeddedRunning = false;
     private EmbeddedServer embeddedServer;
-    private SharedPreferences prefs;
-    private boolean shakeServiceRunning = false;
 
     private static final int ACCENT = 0xFF6366F1;
     private static final int PAGE_BG = 0xFFF8FAFC;
@@ -131,20 +126,6 @@ public class MainActivity extends Activity {
         leftGroup.addView(statusText);
         chip.addView(leftGroup);
 
-        shakeDot = new View(this);
-        LinearLayout.LayoutParams sDotLp = new LinearLayout.LayoutParams(dotSize, dotSize);
-        sDotLp.setMargins(0, 0, (int)(6 * dp), 0);
-        shakeDot.setLayoutParams(sDotLp);
-
-        shakeLabel = new TextView(this);
-        shakeLabel.setTextSize(13);
-        shakeLabel.setTextColor(TEXT_PRIMARY);
-        shakeLabel.setTypeface(null, android.graphics.Typeface.BOLD);
-
-        chip.addView(shakeDot);
-        chip.addView(shakeLabel);
-        updateShakeStatus();
-
         guestBtn = makePrimary("Switch to Guest", btnWidth);
         guestBtn.setEnabled(false);
         guestBtn.setOnClickListener(v -> {
@@ -158,9 +139,6 @@ public class MainActivity extends Activity {
             setBtnLoading(ownerBtn, true);
             execCommand("echo '===SWITCHING==='; am switch-user 0; echo 'SWITCH_EXIT='$?", false, true, ownerBtn);
         });
-
-        prefs = getSharedPreferences("guest_switcher", MODE_PRIVATE);
-        prefs.edit().putBoolean("shake_enabled", true).apply();
 
         Button shizukuBtn = makeSecondary("Open Shizuku", btnWidth);
         shizukuBtn.setOnClickListener(v -> openShizuku());
@@ -190,13 +168,8 @@ public class MainActivity extends Activity {
         ShizukuHelper.addPermissionListener((requestCode, grantResult) -> {
             if (grantResult == PackageManager.PERMISSION_GRANTED) {
                 checkServer();
-                if (!shakeServiceRunning) {
-                    startShakeService();
-                }
             }
         });
-
-        startShakeService();
     }
 
     private Button makePrimary(String text, int width) {
@@ -336,24 +309,6 @@ public class MainActivity extends Activity {
         });
     }
 
-    private void startShakeService() {
-        Intent intent = new Intent(this, ShakeDetectorService.class);
-        if (Build.VERSION.SDK_INT >= 26) {
-            startForegroundService(intent);
-        } else {
-            startService(intent);
-        }
-        shakeServiceRunning = true;
-        updateShakeStatus();
-    }
-
-    private void stopShakeService() {
-        Intent intent = new Intent(this, ShakeDetectorService.class);
-        stopService(intent);
-        shakeServiceRunning = false;
-        updateShakeStatus();
-    }
-
     private void setChip(int color, String text) {
         GradientDrawable circle = new GradientDrawable();
         circle.setShape(GradientDrawable.OVAL);
@@ -362,21 +317,6 @@ public class MainActivity extends Activity {
         circle.setColor(color);
         indicator.setBackground(circle);
         statusText.setText(text);
-    }
-
-    private void updateShakeStatus() {
-        GradientDrawable circle = new GradientDrawable();
-        circle.setShape(GradientDrawable.OVAL);
-        float d = getResources().getDisplayMetrics().density;
-        circle.setSize((int)(10 * d), (int)(10 * d));
-        if (shakeServiceRunning) {
-            circle.setColor(SUCCESS);
-            shakeLabel.setText("Shake ON");
-        } else {
-            circle.setColor(OFFLINE);
-            shakeLabel.setText("Shake OFF");
-        }
-        shakeDot.setBackground(circle);
     }
 
     private void doSwitch() {
@@ -478,7 +418,6 @@ public class MainActivity extends Activity {
             setChip(WARNING, "Grant Shizuku permission\u2026");
             ShizukuHelper.requestPermission(1001);
         }
-        updateShakeStatus();
         checkServer();
     }
 
@@ -511,7 +450,6 @@ public class MainActivity extends Activity {
                 else if (fLevel == 2) setChip(SUCCESS, "Connected");
                 else if (fLevel == 1) setChip(WARNING, "Limited");
                 else setChip(OFFLINE, "Disconnected");
-                updateShakeStatus();
             });
         }).start();
     }
